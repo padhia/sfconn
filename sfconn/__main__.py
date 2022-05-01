@@ -1,9 +1,12 @@
-"manage connections"
+"connection utilities"
 from argparse import ArgumentParser
-from typing import Optional
+from datetime import timedelta
+from pathlib import Path
+from typing import Any, Callable, Optional
 
-from .conn import _conn_opts, connect, from_arg, load_config
-from .types import DatabaseError, InterfaceError
+from .conn import load_config
+from .jwt import LIFETIME, get_token
+from .utils import _conn_opts_checked, _connect_checked, args
 
 try:
 	from keyring import set_password
@@ -12,58 +15,68 @@ except ImportError:
 	_use_keyring = False
 
 
-def list_conn() -> None:
+def list_conn(config_file: Path, **_: Any) -> None:
 	"list all connections"
-	cfg = load_config()
+	cfg = load_config(config_file)
 
-	lines: list[tuple[str, str]] = [('Name', 'Account')]
-	lines.extend(sorted(('' if name is None else name, opts['account']) for name, opts in cfg.items()))
+	lines: list[tuple[str, str, str]] = [('Conn', 'Account', 'User')]
+	lines.extend(sorted(('' if name is None else name, opts['account'], opts.get('user', '')) for name, opts in cfg.items()))
 
-	name_w = max(len(p[0]) for p in lines)
-	acct_w = max(len(p[1]) for p in lines)
+	w = [max(len(r[c]) for r in lines) for c in [0, 1, 2]]
 
-	def printf(n: str, a: str) -> None:
-		print(f"{n:{name_w}}  {a:{acct_w}}")
+	def printf(n: str, a: str, u: str) -> None:
+		print(f"{n:{w[0]}}  {a:{w[1]}}  {u}")
 
-	for e, (name, acct) in enumerate(lines):
-		printf(name, acct)
+	for e, (name, acct, user) in enumerate(lines):
+		printf(name, acct, user)
 		if e == 0:
-			printf('-' * name_w, '-' * acct_w)
+			printf('-' * w[0], '-' * w[1], '-' * w[2])
 
 
-def test_conn(name: Optional[str], save: bool = False) -> None:
+def test_conn(conn: Optional[str], save: bool = False, **kwargs: Any) -> None:
 	"test connection"
+	opts = _conn_opts_checked(conn, **kwargs)
+	with _connect_checked(**opts):
+		if _use_keyring and save and all(o in opts for o in ["account", "user", "password"]):
+			set_password(opts["account"], opts["user"], opts["password"])
+		print("connection successful!")
+
+
+def get_jwt(conn: Optional[str], config_file: Path, lifetime: timedelta, **kwargs: Any) -> None:
+	"get a JWT"
 	try:
-		opts = _conn_opts(name)
-		with connect(**opts):
-			if _use_keyring and save and all(o in opts for o in ["account", "user", "password"]):
-				set_password(opts["account"], opts["user"], opts["password"])
-			print("connection successful!")
-	except (InterfaceError, DatabaseError) as e:
-		raise SystemExit((str(e)))
+		print(get_token(conn, config_file=config_file, lifetime=lifetime))
+	except Exception as msg:
+		raise SystemExit(msg)
 
 
-def main() -> None:
-	parser = ArgumentParser(prog="python -m sfconn", description=__doc__)
+def main(cmd: Callable[..., None], **opts: Any) -> None:
+	cmd(**opts)
+
+
+@args(__doc__, prog="python -m sfconn")
+def getargs(parser: ArgumentParser) -> None:
+	"process run-time arguments"
 	parser.set_defaults(cmd='list')
+	parser.set_defaults(cmd=list_conn)
+
+	def minutes(s: str) -> timedelta:
+		return timedelta(minutes=int(s))
 
 	sp = parser.add_subparsers()
 
-	p = sp.add_parser('list', help='list connections')
-	p.set_defaults(cmd='list')
+	p = sp.add_parser('list', help='list all connections')
+	p.set_defaults(cmd=list_conn)
 
 	p = sp.add_parser('test', help='test a connection')
-	p.add_argument('name', nargs='?', type=from_arg, help="connection name from ~/.snowsql/config")
-	p.set_defaults(cmd='test')
+	p.set_defaults(cmd=test_conn)
 	if _use_keyring:
 		p.add_argument('--save', action='store_true', help="save password in secure local storage")
 
-	opts = vars(parser.parse_args())
-	cmd = opts.pop('cmd')
-	if cmd == 'test':
-		test_conn(**opts)
-	elif cmd == 'list':
-		list_conn()
+	p = sp.add_parser('jwt', help='get a JWT')
+	p.set_defaults(cmd=get_jwt)
+	p.add_argument('--lifetime', metavar='MINUTES', type=minutes, default=LIFETIME,
+		help=f"lifetime of the JWT (default {LIFETIME.seconds // 60} minutes)")
 
 
-main()
+main(**vars(getargs()))

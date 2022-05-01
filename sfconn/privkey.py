@@ -3,16 +3,14 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from functools import cached_property, cache
+from functools import cache, cached_property
 from os.path import expanduser
 from pathlib import Path
 from typing import Optional
 
+import cryptography.hazmat.primitives.serialization as Serde
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
-from cryptography.hazmat.primitives.serialization import (
-	Encoding, NoEncryption, PrivateFormat, PublicFormat, load_pem_private_key
-)
 
 
 @dataclass(frozen=True)
@@ -24,7 +22,7 @@ class PrivateKey:
 	@cached_property
 	def key(self) -> RSAPrivateKey:
 		with self.private_key_file.open("rb") as fh:
-			return load_pem_private_key(  # type: ignore
+			return Serde.load_pem_private_key(  # type: ignore
 				fh.read(),
 				password=self.pass_phrase.encode() if self.pass_phrase is not None else None,
 				backend=default_backend()
@@ -33,14 +31,14 @@ class PrivateKey:
 	@property
 	def pri_bytes(self) -> bytes:
 		return self.key.private_bytes(
-			encoding=Encoding.DER,
-			format=PrivateFormat.PKCS8,
-			encryption_algorithm=NoEncryption()
+			encoding=Serde.Encoding.DER,
+			format=Serde.PrivateFormat.PKCS8,
+			encryption_algorithm=Serde.NoEncryption()
 		)
 
 	@property
 	def pub_bytes(self) -> bytes:
-		return self.key.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+		return self.key.public_key().public_bytes(Serde.Encoding.DER, Serde.PublicFormat.SubjectPublicKeyInfo)
 
 	@staticmethod
 	@cache

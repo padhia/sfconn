@@ -1,4 +1,9 @@
-A Python library to simplify connecting to Snowflake accounts by using [SnowSQL](https://docs.snowflake.com/en/user-guide/snowsql.html) connection information specified in `~/.snowsql/config`
+[![PyPi](https://img.shields.io/pypi/v/sfconn.svg)](https://pypi.python.org/pypi/sfconn) [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT) ![Python3.9+](https://img.shields.io/badge/dynamic/json?query=info.requires_python&label=python&url=https%3A%2F%2Fpypi.org%2Fpypi%2Fsfconn%2Fjson)
+
+
+Snowflake connection helper functions
+
+A Python library to simplify connecting to Snowflake databases by leveraging connection options specified in [SnowSQL](https://docs.snowflake.com/en/user-guide/snowsql.html) configuration file (`~/.snowsql/config`).
 
 # Installation
 
@@ -17,7 +22,7 @@ pip install --upgrade sfconn
 def getconn(name: Optional[str], **overrides: dict[str, Any]) -> Connection
 ```
 
-`getconn` accepts a connection name that is defined in `~/.snowsql/config` and returns a connection object. A `None` as a name will use the default connection. Optionally any DB API connection parameters can also be supplied, which if not `None`, will override the values loaded from the configuration file.
+`getconn` accepts a connection name that is defined in `~/.snowsql/config` and returns a connection object. A `None` value for the name will use the default connection. Any valid DB API connection parameters can also be passed, which if not `None`, will override the values loaded from the configuration file.
 
 **Example:**
 
@@ -36,8 +41,8 @@ with getconn('dev', schema='PUBLIC') as cnx:
 Python scripts that accept command-line parameters and use `argparse` library, can use decorator functions to further reduce boilerplate code needed for setting up common Snowflake connection options as command-line arguments
 
 ```python
-def args(doc: Optional[str]) -> Callable[[argparse.ArgumentParser], None]
-def entry() -> Callable[[Connection, ...], None]
+def args(doc: Optional[str]) -> Callable[[argparse.ArgumentParser], None]:
+def entry() -> Callable[[Connection, ...], None]:
 ```
 
 `args()` decorator function:
@@ -102,7 +107,7 @@ python -m sfconn [list]
 To test a particular connection, use
 
 ```
-python -m sfconn test [--save] <conn>
+python -m sfconn [-c <conn>] test [--save]
 ```
 
 `--save` option applies to connections that require password to be supplied. When specified, it saves the supplied password in OS specific *secure local storage*.
@@ -111,3 +116,11 @@ python -m sfconn test [--save] <conn>
 
 - `--save` option is supported only if the optional python package `keyring` is installed.
 - `keyring` can also be installed indirectly by installing `snowflake-connector-python` with `secure-local-storage` extra dependency as described [here](https://docs.snowflake.com/en/user-guide/python-connector-install.html#step-1-install-the-connector)
+
+## get a JWT
+
+Get a JWT for connections that use key-pair authentication
+
+```
+python -m sfconn [-c <conn>] jwt [--lifetime <minutes>]
+```

@@ -1,7 +1,6 @@
 "get snowflake connection using snowsql connection configuration"
 from __future__ import annotations
 
-import argparse
 import logging
 import os
 import re
@@ -23,9 +22,8 @@ try:
 except ImportError:
 	_use_keyring = False
 
-SFCONN_CONFIG_FILE = Path(_p) if (_p := os.environ.get("SFCONN_CONFIG_FILE")) is not None else Path.home() / '.snowsql' / 'config'
 AUTH_KWDS = ["password", "token", "passcode", "private_key"]
-
+SFCONN_CONFIG_FILE = Path(_p) if (_p := os.environ.get("SFCONN_CONFIG_FILE")) is not None else Path.home() / '.snowsql' / 'config'
 logger = logging.getLogger(__name__)
 
 
@@ -54,6 +52,9 @@ def load_config(config_file: Path = SFCONN_CONFIG_FILE) -> dict[Optional[str], d
 	def conn_opts(section) -> dict[str, Any]:
 		return dict(dbapi_opt(k, v) for k, v in section.items())
 
+	if not config_file.is_file():
+		raise FileNotFoundError(f"{config_file} does not exist or is not a file")
+
 	conf = ConfigParser()
 	conf.read(config_file)
 
@@ -62,7 +63,14 @@ def load_config(config_file: Path = SFCONN_CONFIG_FILE) -> dict[Optional[str], d
 
 def _conn_opts(name: Optional[str] = None, config_file: Path = SFCONN_CONFIG_FILE, **overrides) -> dict[str, Any]:
 	"return unified connection options"
-	opts = load_config(config_file).get(name, {}) | {k: v for k, v in overrides.items() if v is not None}
+	conf_opts = load_config(config_file).get(name)
+	if conf_opts is None:
+		if name is None:
+			raise ValueError(f"connection name was not supplied and no default connection was configured in '{config_file}'")
+		else:
+			raise ValueError(f"'{name}' is not a configured connection in '{config_file}'")
+
+	opts = conf_opts | {k: v for k, v in overrides.items() if v is not None}
 	if 'account' not in opts:
 		raise InterfaceError("Snowflake account name is required")
 
@@ -79,22 +87,13 @@ def _conn_opts(name: Optional[str] = None, config_file: Path = SFCONN_CONFIG_FIL
 	if has_login and not has_auth and opts.get('authenticator') != 'externalbrowser':
 		opts |= {"password": getpass(opts["account"], opts["user"])}
 
-	return opts
-
-
-def getconn(name: Optional[str] = None, config_file: Path = SFCONN_CONFIG_FILE, **overrides) -> Connection:
-	"return a connection object for the specified name or default connection if name is None"
-	opts = _conn_opts(name, config_file, **overrides)
-
 	# set application name if not already specified and one is available
 	if 'application' not in opts and sys.argv[0] and (app_name := Path(sys.argv[0]).name):
 		opts['application'] = app_name
 
-	return connect(**opts)
+	return opts
 
 
-def from_arg(name: str) -> str:
-	"return the name if it's a valid connection name, otherwise throw ArgumentTypeError exception"
-	if name not in load_config():
-		raise argparse.ArgumentTypeError(f"{name} is not a valid connection name")
-	return name
+def getconn(name: Optional[str] = None, **overrides) -> Connection:
+	"return a connection object for the specified name or default connection if name is None"
+	return connect(**_conn_opts(name, **overrides))
