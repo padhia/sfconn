@@ -1,12 +1,13 @@
 "connection utilities"
+import json
 from argparse import ArgumentParser
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, List, Optional
 
-from .conn import load_config
+from .conn import conn_opts, load_config, getconn_checked
 from .jwt import LIFETIME, get_token
-from .utils import _conn_opts_checked, _connect_checked, args
+from .utils import args
 
 try:
 	from keyring import set_password
@@ -19,7 +20,7 @@ def list_conn(config_file: Path, **_: Any) -> None:
 	"list all connections"
 	cfg = load_config(config_file)
 
-	lines: list[tuple[str, str, str]] = [('Conn', 'Account', 'User')]
+	lines: List[tuple[str, str, str]] = [('Conn', 'Account', 'User')]
 	lines.extend(sorted(('' if name is None else name, opts['account'], opts.get('user', '')) for name, opts in cfg.items()))
 
 	w = [max(len(r[c]) for r in lines) for c in [0, 1, 2]]
@@ -35,11 +36,23 @@ def list_conn(config_file: Path, **_: Any) -> None:
 
 def test_conn(conn: Optional[str], save: bool = False, **kwargs: Any) -> None:
 	"test connection"
-	opts = _conn_opts_checked(conn, **kwargs)
-	with _connect_checked(**opts):
+	try:
+		opts = conn_opts(conn, **kwargs)
+	except Exception as err:
+		raise SystemExit(err)
+
+	with getconn_checked(conn, **kwargs):
 		if _use_keyring and save and all(o in opts for o in ["account", "user", "password"]):
 			set_password(opts["account"], opts["user"], opts["password"])
 		print("connection successful!")
+
+
+def as_json(conn: Optional[str], **kwargs: Any) -> None:
+	"convert connection info to json"
+	try:
+		print(json.dumps(conn_opts(conn, expand_private_key=False, application=None, **kwargs), indent=2))
+	except Exception as err:
+		raise SystemExit(err)
 
 
 def get_jwt(conn: Optional[str], config_file: Path, lifetime: timedelta, **kwargs: Any) -> None:
@@ -50,7 +63,7 @@ def get_jwt(conn: Optional[str], config_file: Path, lifetime: timedelta, **kwarg
 		raise SystemExit(msg)
 
 
-def main(cmd: Callable[..., None], **opts: Any) -> None:
+def main(cmd: Callable[..., None], loglevel: int, **opts: Any) -> None:
 	cmd(**opts)
 
 
@@ -77,6 +90,9 @@ def getargs(parser: ArgumentParser) -> None:
 	p.set_defaults(cmd=get_jwt)
 	p.add_argument('--lifetime', metavar='MINUTES', type=minutes, default=LIFETIME,
 		help=f"lifetime of the JWT (default {LIFETIME.seconds // 60} minutes)")
+
+	p = sp.add_parser('json', help='show information as a JSON object')
+	p.set_defaults(cmd=as_json)
 
 
 main(**vars(getargs()))

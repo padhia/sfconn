@@ -1,14 +1,12 @@
 "Utility functions"
 import logging
 from argparse import SUPPRESS, ArgumentParser, ArgumentTypeError
-from configparser import MissingSectionHeaderError
-from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, List, Optional
 
 from . import __name__ as rootpkg
-from .conn import SFCONN_CONFIG_FILE, _conn_opts, connect
+from .conn import SFCONN_CONFIG_FILE, getconn_checked
 
 logger = logging.getLogger(__name__)
 _loglevel = logging.WARNING
@@ -21,28 +19,6 @@ def init_logging(pkgname: str = rootpkg) -> None:
 	logger = logging.getLogger(pkgname)
 	logger.addHandler(h)
 	logger.setLevel(_loglevel)
-
-
-def _conn_opts_checked(conn, config_file: Path, **kwargs) -> dict[str, Any]:
-	try:
-		return _conn_opts(conn, config_file=config_file, **kwargs)
-	except MissingSectionHeaderError:
-		raise SystemExit(f"'{config_file}' is not a valid configuration file")
-	except (FileNotFoundError, ValueError) as msg:
-		raise SystemExit(msg)
-
-
-@contextmanager
-def _connect_checked(**opts: Any):
-	try:
-		cnx = connect(**opts)
-	except Exception as msg:
-		raise SystemExit(msg)
-
-	try:
-		yield cnx
-	finally:
-		cnx.close()
 
 
 def entry(fn: Callable[..., None]) -> Callable[..., None]:
@@ -63,8 +39,7 @@ def entry(fn: Callable[..., None]) -> Callable[..., None]:
 
 		_loglevel = loglevel
 		init_logging()
-		opts = _conn_opts_checked(conn, config_file, database=database, role=role, schema=schema, warehouse=warehouse)
-		with _connect_checked(**opts) as cnx:
+		with getconn_checked(conn, config_file=config_file, database=database, role=role, schema=schema, warehouse=warehouse) as cnx:
 			return fn(cnx, **kwargs)
 
 	return wrapped
@@ -93,7 +68,7 @@ def args(doc: Optional[str], config_file: Path = SFCONN_CONFIG_FILE, **kwargs: A
 	"""Function decorator that instantiates and adds snowflake database connection arguments"""
 	def getargs(fn: Callable[[ArgumentParser], None]) -> Callable[..., Any]:
 		@wraps(fn)
-		def wrapped(args: Optional[list[str]] = None) -> Any:
+		def wrapped(args: Optional[List[str]] = None) -> Any:
 			parser = ArgumentParser(description=doc, **kwargs)
 			fn(parser)
 			add_conn_args(parser, config_file=config_file)

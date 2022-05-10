@@ -19,7 +19,7 @@ pip install --upgrade sfconn
 
 **Usage:**
 ```python
-def getconn(name: Optional[str], **overrides: dict[str, Any]) -> Connection
+def getconn(name: Optional[str], **overrides: Dict[str, Any]) -> Connection
 ```
 
 `getconn` accepts a connection name that is defined in `~/.snowsql/config` and returns a connection object. A `None` value for the name will use the default connection. Any valid DB API connection parameters can also be passed, which if not `None`, will override the values loaded from the configuration file.
@@ -34,6 +34,25 @@ with getconn('dev', schema='PUBLIC') as cnx:
     with cnx.cursor() as csr:
         csr.execute('SELECT CURRENT_USER()')
         print("Hello " + csr.fetchone()[0])
+```
+
+## `conn_opts()`
+
+**Usage:**
+```python
+def conn_opts(name: Optional[str], **overrides: Dict[str, Any]) -> Dict[str, Any]
+```
+
+`conn_opts`, returns a Python `dict` object populated with options and values. This can be useful passing as an argument to `snowflake.snowpark.Session.builder.configs()` method.
+
+**Example:**
+
+```python
+from sfconn import conn_opts
+from snowflake.snowpark import Session
+
+# assuming 'dev' is a connection defined in ~/.snowflake/config
+session = Session.builder.configs(conn_opts('dev')).create()
 ```
 
 ## Decorator functions
@@ -100,6 +119,14 @@ To list all defined connections, use
 
 ```
 python -m sfconn [list]
+```
+
+## connection options as JSON
+
+Convert connection options to a JSON object.
+
+```
+python -m sfconn [-c <conn>] json
 ```
 
 ## test a connection

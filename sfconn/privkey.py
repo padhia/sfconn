@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from functools import cache, cached_property
+from functools import lru_cache, cached_property
 from os.path import expanduser
 from pathlib import Path
 from typing import Optional
@@ -41,7 +41,7 @@ class PrivateKey:
 		return self.key.public_key().public_bytes(Serde.Encoding.DER, Serde.PublicFormat.SubjectPublicKeyInfo)
 
 	@staticmethod
-	@cache
+	@lru_cache(maxsize=None)
 	def from_file(
 		filepath: str,
 		pass_phrase: Optional[str] = None,
