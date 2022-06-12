@@ -5,6 +5,17 @@ Snowflake connection helper functions
 
 A Python library to simplify connecting to Snowflake databases by leveraging connection options specified in [SnowSQL](https://docs.snowflake.com/en/user-guide/snowsql.html) configuration file (`~/.snowsql/config`).
 
+**Notes** Following are some minor differences between the way `SnowSQL` interprets connection options v/s `sfconn` library:
+1. SnowSQL doesn't (yet) allow `private_key_path` to contain home-anchored paths (e.g. `~/keys/key.p8`), but `sfconn` library does
+1. SnowSQL treats relative paths as relative to working directory of the running process, whereas, `sfconn` library by default evaluates relative paths as relative to the config file location. If SnowSQL-like behavior is needed, do either of the following:
+    - before any other calls to `sfconn` library, include following code
+    ```python
+    import sfconn
+
+    sfconn.conn.relpath_anchor_is_cwd = True
+    ```
+    - set `SFCONN_RELPATH_ANCHOR_CWD=1` environment variable
+
 # Installation
 
 Use Python's standard `pip` utility for installation:

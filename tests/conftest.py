@@ -38,7 +38,7 @@ def config_default(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def config_pkey(tmp_path: Path) -> Path:
+def config_keypair(tmp_path: Path) -> Path:
 	"config"
 	pkey = PKey()
 	pkey.generate_key(TYPE_RSA, 2048)
@@ -55,6 +55,19 @@ def config_pkey(tmp_path: Path) -> Path:
 		accountname = sfdev
 		user = dev_user
 		private_key_path = {private_key_path}"""))
+
+	return config_file
+
+
+@pytest.fixture
+def config_privkey_path(tmp_path: Path) -> Path:
+	"config"
+	config_file = tmp_path / "config_privkey_path"
+	config_file.write_text(dedent("""\
+		[connections.dev]
+		accountname = sfdev
+		user = dev_user
+		private_key_path = keys/key.p8"""))
 
 	return config_file
 

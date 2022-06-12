@@ -1,10 +1,6 @@
 "Private key"
-from __future__ import annotations
-
 import os
-from dataclasses import dataclass
-from functools import lru_cache, cached_property
-from os.path import expanduser
+from functools import cached_property
 from pathlib import Path
 from typing import Optional
 
@@ -13,11 +9,19 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 
 
-@dataclass(frozen=True)
 class PrivateKey:
 	"class to extract various pieces of information from private-key file"
-	private_key_file: Path
-	pass_phrase: Optional[str]
+	def __init__(
+		self,
+		private_key_file: Path,
+		pass_phrase: Optional[str] = None,
+		pass_phrase_var: Optional[str] = "SNOWSQL_PRIVATE_KEY_PASSPHRASE"
+	):
+		if not private_key_file.is_file():
+			raise FileNotFoundError(f"Invalid private Key file '{private_key_file}'")
+
+		self.private_key_file = private_key_file
+		self.pass_phrase = os.environ.get(pass_phrase_var) if pass_phrase is None and pass_phrase_var is not None else pass_phrase
 
 	@cached_property
 	def key(self) -> RSAPrivateKey:
@@ -39,19 +43,3 @@ class PrivateKey:
 	@property
 	def pub_bytes(self) -> bytes:
 		return self.key.public_key().public_bytes(Serde.Encoding.DER, Serde.PublicFormat.SubjectPublicKeyInfo)
-
-	@staticmethod
-	@lru_cache(maxsize=None)
-	def from_file(
-		filepath: str,
-		pass_phrase: Optional[str] = None,
-		pass_phrase_var: Optional[str] = "SNOWSQL_PRIVATE_KEY_PASSPHRASE"
-	) -> PrivateKey:
-		"return PrivateKey instance from the file and pass phrase or pass-phrase variable (defaults to SNOWSQL_PRIVATE_KEY_PASSPHRASE)"
-		if not (fp := Path(expanduser(filepath))).exists():
-			raise FileNotFoundError(f"Private Key file '{filepath}' does not exist")
-
-		if pass_phrase is None and pass_phrase_var is not None:
-			pass_phrase = os.environ.get(pass_phrase_var)
-
-		return PrivateKey(fp, pass_phrase)

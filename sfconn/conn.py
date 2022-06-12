@@ -22,8 +22,10 @@ try:
 except ImportError:
 	_use_keyring = False
 
-AUTH_KWDS = ["password", "token", "passcode", "private_key", "private_key_path"]
 SFCONN_CONFIG_FILE = Path(_p) if (_p := os.environ.get("SFCONN_CONFIG_FILE")) is not None else Path.home() / '.snowsql' / 'config'
+AUTH_KWDS = ["password", "token", "passcode", "private_key", "private_key_path"]
+
+relpath_anchor_is_cwd = os.environ.get("SFCONN_RELPATH_ANCHOR_CWD", "0").upper() in ["YES", "1", "TRUE", "Y"]
 logger = logging.getLogger(__name__)
 
 
@@ -55,6 +57,12 @@ def load_config(config_file: Path = SFCONN_CONFIG_FILE) -> Dict[Optional[str], D
 			return (m.group(1), val)
 		if key == 'dbname':
 			return ('database', val)
+		if key == 'private_key_path':
+			path = Path(val).expanduser()
+			if not path.is_absolute():
+				path = (Path.cwd() if relpath_anchor_is_cwd else config_file.parent) / path
+			return (key, path)
+
 		return (key, val)
 
 	def conn_name(name: str) -> Optional[str]:
@@ -106,7 +114,7 @@ def conn_opts(
 		logger.debug("getcon() options: %s", {k: v if k not in AUTH_KWDS else '*****' for k, v in opts.items()})
 
 	if expand_private_key and 'private_key_path' in opts:
-		opts['private_key'] = PrivateKey.from_file(opts['private_key_path']).pri_bytes
+		opts['private_key'] = PrivateKey(opts['private_key_path']).pri_bytes
 		del opts['private_key_path']
 
 	has_login = all(o in opts for o in ["user", "account"])

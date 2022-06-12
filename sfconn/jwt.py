@@ -55,7 +55,7 @@ def get_token(conn: Optional[str] = None, lifetime: dt.timedelta = LIFETIME, con
 
 	qual_user = f"{_clean_account_name(opts['account']).upper()}.{opts['user'].upper()}"
 
-	key = PrivateKey.from_file(keyf)
+	key = PrivateKey(keyf)
 	now = dt.datetime.now()
 
 	payload = {
