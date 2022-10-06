@@ -1,5 +1,6 @@
+# type: ignore
 "database imports"
 from snowflake.connector.connection import SnowflakeConnection as Connection  # noqa
 from snowflake.connector.cursor import ResultMetadata  # noqa
-from snowflake.connector.cursor import SnowflakeCursor as Cursor  # noqa
+from snowflake.connector.cursor import SnowflakeCursor as Cursor # noqa
 from snowflake.connector import DatabaseError, InterfaceError  # noqa
