@@ -62,7 +62,9 @@ def load_config(config_file: Path = SFCONN_CONFIG_FILE) -> Dict[Optional[str], D
             if not path.is_absolute():
                 path = (Path.cwd() if relpath_anchor_is_cwd else config_file.parent) / path
             return (key, path)
-
+        if key == "password":
+            if val[0] == '"' and val[-1] == '"' or val[0] == "'" and val[-1] == "'":
+                val = val[1:-1].replace("\\'", "'").replace('\\"', '"')
         return (key, val)
 
     def conn_name(name: str) -> Optional[str]:

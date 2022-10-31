@@ -35,6 +35,11 @@ def test_conn_overrides(config: Path) -> None:
     assert conn_opts('dev', config_file=config, database="new_db")["database"] == "new_db"
 
 
+def test_password_special_char(config: Path) -> None:
+    assert conn_opts('spcl', config_file=config)["password"] == "my$^pwd"
+    assert conn_opts('spcl2', config_file=config)["password"] == "my$^\"\'pwd"
+
+
 def test_no_pkey_expand(config_keypair: Path) -> None:
     assert "private_key_path" in conn_opts('dev', config_file=config_keypair, expand_private_key=False)
 

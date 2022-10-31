@@ -23,7 +23,7 @@ def test_noconn_config(config: Path) -> None:
 
 
 def test_config_env(config: Path) -> None:
-    assert set(load_config().keys()) == {"dev", "prd"}
+    assert set(load_config().keys()) == {"dev", "prd", "spcl", "spcl2"}
 
 
 def test_no_default_conn(config: Path) -> None:

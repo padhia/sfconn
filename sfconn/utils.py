@@ -5,14 +5,14 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, List, Optional
 
-from . import __name__ as rootpkg
 from .conn import SFCONN_CONFIG_FILE, getconn_checked
 
 logger = logging.getLogger(__name__)
 _loglevel = logging.WARNING
+_rootpkg = ".".join(__name__.split(".")[:-1])
 
 
-def init_logging(pkgname: str = rootpkg) -> None:
+def init_logging(pkgname: str = _rootpkg) -> None:
     "initialize the logging system"
     h = logging.StreamHandler()
     h.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
