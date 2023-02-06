@@ -1,7 +1,7 @@
 "test configuration files"
 from configparser import MissingSectionHeaderError
 from pathlib import Path
-
+import os
 import pytest
 
 from sfconn.conn import conn_opts, load_config
@@ -29,6 +29,12 @@ def test_config_env(config: Path) -> None:
 def test_no_default_conn(config: Path) -> None:
     with pytest.raises(KeyError):
         conn_opts(None, config_file=config)
+
+
+def test_envvar_default(config: Path) -> None:
+    os.environ["SFCONN"] = 'prd'
+    assert conn_opts(None, config_file=config)['account'] == 'sfprd'
+    del os.environ['SFCONN']
 
 
 def test_default_conn(config_default: Path) -> None:

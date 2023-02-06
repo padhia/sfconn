@@ -1,5 +1,5 @@
 "connection package"
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 from .conn import conn_opts, getconn, getconn_checked
 from .jwt import get_token

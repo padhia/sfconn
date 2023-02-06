@@ -39,7 +39,8 @@ def entry(fn: Callable[..., None]) -> Callable[..., None]:
 
         _loglevel = loglevel
         init_logging()
-        with getconn_checked(conn, config_file=config_file, database=database, role=role, schema=schema, warehouse=warehouse) as cnx:
+        with getconn_checked(conn, config_file=config_file, database=database, role=role, schema=schema,
+                             warehouse=warehouse) as cnx:
             return fn(cnx, **kwargs)
 
     return wrapped
@@ -61,7 +62,8 @@ def add_conn_args(parser: ArgumentParser, config_file: Path = SFCONN_CONFIG_FILE
     g.add_argument('--schema', metavar='', help='override or set the default schema')
     g.add_argument('--warehouse', metavar='', help='override or set the default warehouse')
 
-    parser.add_argument('--debug', dest='loglevel', action='store_const', const=logging.DEBUG, default=logging.WARNING, help=SUPPRESS)
+    parser.add_argument('--debug', dest='loglevel', action='store_const', const=logging.DEBUG, default=logging.WARNING,
+                        help=SUPPRESS)
 
 
 def args(doc: Optional[str], config_file: Path = SFCONN_CONFIG_FILE, **kwargs: Any) -> Callable[..., Callable[..., Any]]:

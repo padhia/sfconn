@@ -103,10 +103,12 @@ def conn_opts(
         KeyError: when connection name lookup fails
         *: any exceptions raised by load_config() are passed through
     """
+    if name is None:
+        name = os.environ.get("SFCONN")
     conf_opts = load_config(config_file).get(name)
     if conf_opts is None:
         if name is None:
-            raise KeyError(f"connection name was not supplied and no default connection was configured in '{config_file}'")
+            raise KeyError("Connection name required (otherwise, either set SFCONN=<conn> or define a default connection)")
         else:
             raise KeyError(f"'{name}' is not a configured connection in '{config_file}'")
 

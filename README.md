@@ -6,6 +6,7 @@ Snowflake connection helper functions
 A Python library to simplify connecting to Snowflake databases by leveraging connection options specified in [SnowSQL](https://docs.snowflake.com/en/user-guide/snowsql.html) configuration file (`~/.snowsql/config`).
 
 **Notes** Following are some minor differences between the way `SnowSQL` interprets connection options v/s `sfconn` library:
+1. `sfconn` library supports setting `SFCONN` environment variable to be used as a default connection name before searching for a default connection entry in the config file.
 1. SnowSQL doesn't (yet) allow `private_key_path` to contain home-anchored paths (e.g. `~/keys/key.p8`), but `sfconn` library does
 1. SnowSQL treats relative paths as relative to working directory of the running process, whereas, `sfconn` library by default evaluates relative paths as relative to the config file location. If SnowSQL-like behavior is needed, do either of the following:
     - before any other calls to `sfconn` library, include following code
@@ -33,7 +34,7 @@ pip install --upgrade sfconn
 def getconn(name: Optional[str], **overrides: Dict[str, Any]) -> Connection
 ```
 
-`getconn` accepts a connection name that is defined in `~/.snowsql/config` and returns a connection object. A `None` value for the name will use the default connection. Any valid DB API connection parameters can also be passed, which if not `None`, will override the values loaded from the configuration file.
+`getconn` accepts a connection name that is defined in `~/.snowsql/config` and returns a connection object. If connection name is `None`, value of `SFCONN` environment variable will be used as the default connection name; if `SFCONN` is unset then the default connection entry defined in the config file will be used before returning an error. Any additional parameters, which are not set to `None`, will override the values loaded from the configuration file.
 
 **Example:**
 
