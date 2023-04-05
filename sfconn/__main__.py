@@ -44,15 +44,35 @@ def test_conn(conn: Optional[str], save: bool = False, **kwargs: Any) -> None:
     with getconn_checked(conn, **kwargs):
         if _use_keyring and save and all(o in opts for o in ["account", "user", "password"]):
             set_password(opts["account"], opts["user"], opts["password"])
-        print("connection successful!")
+        print(f"connection to '{opts['account']}' successful!")
 
 
-def as_json(conn: Optional[str], **kwargs: Any) -> None:
+def as_json(conn: Optional[str], export_all: Optional[Path], config_file: Path, **kwargs: Any) -> None:
     "convert connection info to json"
+    class PathJsonEncoder(json.JSONEncoder):
+        def default(self, o: Any) -> Any:
+            return str(o) if isinstance(o, Path) else super().default(o)
+
+    if export_all is None:
+        try:
+            opts = conn_opts(conn, expand_private_key=False, application=None, config_file=config_file, **kwargs)
+            print(json.dumps(opts, cls=PathJsonEncoder, indent=2))
+        except KeyError as err:
+            raise SystemExit(err)
+        return
+
+    if not export_all.is_dir():
+        raise SystemExit(f"{export_all} is not a valid directory")
+
     try:
-        print(json.dumps(conn_opts(conn, expand_private_key=False, application=None, **kwargs), indent=2))
+        conns = load_config(config_file)
     except Exception as err:
         raise SystemExit(err)
+
+    for conn in conns.keys():
+        opts = conn_opts(conn, expand_private_key=False, application=None, config_file=config_file, **kwargs)
+        jsonf = export_all / ("default.json" if conn is None else f"{conn}.json")
+        jsonf.write_text(json.dumps(opts, cls=PathJsonEncoder, indent=2) + "\n")
 
 
 def get_jwt(conn: Optional[str], config_file: Path, lifetime: timedelta, **kwargs: Any) -> None:
@@ -70,7 +90,6 @@ def main(cmd: Callable[..., None], loglevel: int, **opts: Any) -> None:
 @args(__doc__, prog="python -m sfconn")
 def getargs(parser: ArgumentParser) -> None:
     "process run-time arguments"
-    parser.set_defaults(cmd='list')
     parser.set_defaults(cmd=list_conn)
 
     def minutes(s: str) -> timedelta:
@@ -91,8 +110,10 @@ def getargs(parser: ArgumentParser) -> None:
     p.add_argument('--lifetime', metavar='MINUTES', type=minutes, default=LIFETIME,
                    help=f"lifetime of the JWT (default {LIFETIME.seconds // 60} minutes)")
 
-    p = sp.add_parser('json', help='show information as a JSON object')
+    p = sp.add_parser('json', help='show connection information in JSON object')
+    p.add_argument("-x", "--export-all", type=Path, help="export all connection entries as JSON files to a directory")
+
     p.set_defaults(cmd=as_json)
 
 
-main(**vars(getargs()))
+main(**vars(getargs()))  # type: ignore
