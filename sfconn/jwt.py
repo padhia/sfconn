@@ -19,16 +19,16 @@ def fingerprint(pubkey: bytes) -> str:
     "base64 encoded fingerprint of the public key"
     sha256hash = hashlib.sha256()
     sha256hash.update(pubkey)
-    return 'SHA256:' + base64.b64encode(sha256hash.digest()).decode('utf-8')
+    return "SHA256:" + base64.b64encode(sha256hash.digest()).decode("utf-8")
 
 
 def _clean_account_name(account: str) -> str:
     "ref: https://docs.snowflake.com/en/developer-guide/sql-api/authenticating.html#generating-a-jwt-in-python"
-    if '.global' not in account:
-        if (idx := account.find('.')) > 0:
+    if ".global" not in account:
+        if (idx := account.find(".")) > 0:
             return account[:idx]
     else:
-        if (idx := account.find('-')) > 0:
+        if (idx := account.find("-")) > 0:
             return account[:idx]
     return account
 
@@ -50,7 +50,7 @@ def get_token(conn: Optional[str] = None, lifetime: dt.timedelta = LIFETIME, con
     """
 
     opts = conn_opts(conn, config_file=config_file, expand_private_key=False)
-    if (keyf := opts.get('private_key_path')) is None:
+    if (keyf := opts.get("private_key_path")) is None:
         raise ValueError(f"'{conn}' does not use key-pair authentication to support creating a JWT")
 
     qual_user = f"{_clean_account_name(opts['account']).upper()}.{opts['user'].upper()}"
@@ -62,7 +62,7 @@ def get_token(conn: Optional[str] = None, lifetime: dt.timedelta = LIFETIME, con
         "iss": f"{qual_user}.{fingerprint(key.pub_bytes)}",
         "sub": f"{qual_user}",
         "iat": int(now.timestamp()),
-        "exp": int((now + lifetime).timestamp())
+        "exp": int((now + lifetime).timestamp()),
     }
 
     return jwt.encode(payload, key=key.key, algorithm=ALGORITHM)  # type: ignore

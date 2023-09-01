@@ -18,11 +18,10 @@ from .types import Connection
 
 try:
     from keyring import get_password
-    _use_keyring = True
 except ImportError:
-    _use_keyring = False
+    get_password = None
 
-SFCONN_CONFIG_FILE = Path(_p) if (_p := os.environ.get("SFCONN_CONFIG_FILE")) is not None else Path.home() / '.snowsql' / 'config'
+SFCONN_CONFIG_FILE = Path(_p) if (_p := os.environ.get("SFCONN_CONFIG_FILE")) is not None else Path.home() / ".snowsql" / "config"
 AUTH_KWDS = ["password", "token", "passcode", "private_key", "private_key_path"]
 
 relpath_anchor_is_cwd = os.environ.get("SFCONN_RELPATH_ANCHOR_CWD", "0").upper() in ["YES", "1", "TRUE", "Y"]
@@ -31,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 def getpass(host: str, user: str) -> str:
     "return password from user's keyring if found; else prompt for it"
-    if _use_keyring and (passwd := get_password(host, user)) is not None:
+    if get_password is not None and (passwd := get_password(host, user)) is not None:
         logger.debug("Using password from user's keyring: %s@%s", user, host)
         return passwd
     return askpass(f"Password '{user}@{host}': ")
@@ -51,13 +50,14 @@ def load_config(config_file: Path = SFCONN_CONFIG_FILE) -> Dict[Optional[str], D
         FileNotFoundError: If the config_file doesn't exist or not a file
         MissingSectionHeaderError: If config_file doesn't contain any section, or is invalid
     """
+
     def dbapi_opt(key: str, val: str) -> tuple[str, Any]:
         "convert snowsql connection option to corresponding python DB API connect() option"
-        if (m := re.fullmatch('(user|role|account|schema|warehouse)name', key)) is not None:
+        if (m := re.fullmatch("(user|role|account|schema|warehouse)name", key)) is not None:
             return (m.group(1), val)
-        if key == 'dbname':
-            return ('database', val)
-        if key == 'private_key_path':
+        if key == "dbname":
+            return ("database", val)
+        if key == "private_key_path":
             path = Path(val).expanduser()
             if not path.is_absolute():
                 path = (Path.cwd() if relpath_anchor_is_cwd else config_file.parent) / path
@@ -83,10 +83,7 @@ def load_config(config_file: Path = SFCONN_CONFIG_FILE) -> Dict[Optional[str], D
 
 
 def conn_opts(
-    name: Optional[str] = None,
-    config_file: Path = SFCONN_CONFIG_FILE,
-    expand_private_key: bool = True,
-    **overrides: Any
+    name: Optional[str] = None, config_file: Path = SFCONN_CONFIG_FILE, expand_private_key: bool = True, **overrides: Any
 ) -> Dict[str, Any]:
     """return unified connection options
 
@@ -115,21 +112,21 @@ def conn_opts(
     opts = dict(conf_opts, **{k: v for k, v in overrides.items() if v is not None})
 
     if logger.getEffectiveLevel() <= logging.DEBUG:
-        logger.debug("getcon() options: %s", {k: v if k not in AUTH_KWDS else '*****' for k, v in opts.items()})
+        logger.debug("getcon() options: %s", {k: v if k not in AUTH_KWDS else "*****" for k, v in opts.items()})
 
-    if expand_private_key and 'private_key_path' in opts:
-        opts['private_key'] = PrivateKey(opts['private_key_path']).pri_bytes
-        del opts['private_key_path']
+    if expand_private_key and "private_key_path" in opts:
+        opts["private_key"] = PrivateKey(opts["private_key_path"]).pri_bytes
+        del opts["private_key_path"]
 
     has_login = all(o in opts for o in ["user", "account"])
     has_auth = any(o in opts for o in AUTH_KWDS)
 
-    if has_login and not has_auth and opts.get('authenticator') != 'externalbrowser':
+    if has_login and not has_auth and opts.get("authenticator") != "externalbrowser":
         opts["password"] = getpass(opts["account"], opts["user"])
 
     # set application name if not already specified and one is available
-    if 'application' not in overrides and sys.argv[0] and (app_name := Path(sys.argv[0]).name):
-        opts['application'] = app_name
+    if "application" not in overrides and sys.argv[0] and (app_name := Path(sys.argv[0]).name):
+        opts["application"] = app_name
 
     return opts
 

@@ -74,6 +74,7 @@ Python scripts that accept command-line parameters and use `argparse` library, c
 ```python
 def args(doc: Optional[str]) -> Callable[[argparse.ArgumentParser], None]:
 def entry() -> Callable[[Connection, ...], None]:
+def entry_opts() => Callable([dict[str, Any, ...]])
 ```
 
 `args()` decorator function:
@@ -84,7 +85,10 @@ def entry() -> Callable[[Connection, ...], None]:
 `entry()` decorator function:
 1. consumes standard Snowflake connection options (specified with `args()`)
 1. creates a connection object
-1. calls the decorated function with a connection object as first argument and any other script specific options that were specified on command line
+1. calls the decorated function with a connection object as first parameter and any other script specific options that were specified on command line
+
+`entry_opts()` decorator function:
+- Similar to `entry()` but passes a `dict` of options as the first parameter. This is useful for passing options to the `snowflake.snowpark.Session.builder.configs()` method
 
 **Example:**
 
