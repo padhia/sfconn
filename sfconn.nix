@@ -1,10 +1,11 @@
-{ lib, python }:
-python.pkgs.buildPythonPackage rec {
+{ lib, buildPythonPackage, snowflake-connector-python }:
+
+buildPythonPackage rec {
   pname = "sfconn";
   version = "0.2.4";
   src = ./.;
 
-  propagatedBuildInputs = with python.pkgs; [
+  propagatedBuildInputs = [
     snowflake-connector-python
   ];
 
