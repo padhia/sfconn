@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sfconn"
+authors = [
+    {name = "Paresh Adhia", email = "padhia+github@gmail.com"},
+]
+description = "Snowflake connection helper functions"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "snowflake-connector-python",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+keyring = ["keyring"]
+jwt = ["pyjwt"]
+tests = ["pytest"]
+
+[tool.setuptools.dynamic]
+version = {attr = "sfconn.__version__"}
+
+[tool.setuptools.package-data]
+"*" = ["py.typed"]
+
+[tool.ruff]
+line-length = 130
+target-version = "py310"

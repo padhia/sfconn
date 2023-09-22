@@ -1,12 +1,17 @@
-{ lib, buildPythonPackage, snowflake-connector-python }:
+{ lib, buildPythonPackage, setuptools, snowflake-connector-python }:
 
 buildPythonPackage rec {
   pname = "sfconn";
-  version = "0.2.4";
+  version = "0.2.5";
   src = ./.;
+  format = "pyproject";
 
   propagatedBuildInputs = [
     snowflake-connector-python
+  ];
+
+  nativeBuildInputs = [
+    setuptools
   ];
 
   doCheck = false;
