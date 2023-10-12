@@ -6,7 +6,7 @@ import os
 import re
 import sys
 from configparser import ConfigParser
-from functools import lru_cache
+from functools import cache
 from getpass import getpass as askpass
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
@@ -36,7 +36,7 @@ def getpass(host: str, user: str) -> str:
     return askpass(f"Password '{user}@{host}': ")
 
 
-@lru_cache(maxsize=None)
+@cache
 def load_config(config_file: Path = SFCONN_CONFIG_FILE) -> Dict[Optional[str], Dict[str, Any]]:
     """load connections from configuration file
 
