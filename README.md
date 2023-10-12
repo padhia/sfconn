@@ -31,7 +31,7 @@ pip install --upgrade sfconn
 
 **Usage:**
 ```python
-def getconn(name: Optional[str], **overrides: Dict[str, Any]) -> Connection
+def getconn(name: str | None, **overrides: dict[str, Any]) -> Connection
 ```
 
 `getconn` accepts a connection name that is defined in `~/.snowsql/config` and returns a connection object. If connection name is `None`, value of `SFCONN` environment variable will be used as the default connection name; if `SFCONN` is unset then the default connection entry defined in the config file will be used before returning an error. Any additional parameters, which are not set to `None`, will override the values loaded from the configuration file.
@@ -52,7 +52,7 @@ with getconn('dev', schema='PUBLIC') as cnx:
 
 **Usage:**
 ```python
-def conn_opts(name: Optional[str], **overrides: Dict[str, Any]) -> Dict[str, Any]
+def conn_opts(name: str | None , **overrides: dict[str, Any]) -> dict[str, Any]
 ```
 
 `conn_opts`, returns a Python `dict` object populated with options and values. This can be useful passing as an argument to `snowflake.snowpark.Session.builder.configs()` method.
@@ -72,7 +72,7 @@ session = Session.builder.configs(conn_opts('dev')).create()
 Python scripts that accept command-line parameters and use `argparse` library, can use decorator functions to further reduce boilerplate code needed for setting up common Snowflake connection options as command-line arguments
 
 ```python
-def args(doc: Optional[str]) -> Callable[[argparse.ArgumentParser], None]:
+def args(doc: str | None) -> Callable[[argparse.ArgumentParser], None]:
 def entry() -> Callable[[Connection, ...], None]:
 def entry_opts() => Callable([dict[str, Any, ...]])
 ```

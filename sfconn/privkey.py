@@ -2,7 +2,6 @@
 import os
 from functools import cached_property
 from pathlib import Path
-from typing import Optional
 
 import cryptography.hazmat.primitives.serialization as Serde
 from cryptography.hazmat.backends import default_backend
@@ -15,8 +14,8 @@ class PrivateKey:
     def __init__(
         self,
         private_key_file: Path,
-        pass_phrase: Optional[str] = None,
-        pass_phrase_var: Optional[str] = "SNOWSQL_PRIVATE_KEY_PASSPHRASE",
+        pass_phrase: str | None = None,
+        pass_phrase_var: str | None = "SNOWSQL_PRIVATE_KEY_PASSPHRASE",
     ):
         if not private_key_file.is_file():
             raise FileNotFoundError(f"Invalid private Key file '{private_key_file}'")

@@ -3,7 +3,6 @@ import base64
 import datetime as dt
 import hashlib
 from pathlib import Path
-from typing import Optional
 
 import jwt
 
@@ -33,7 +32,7 @@ def _clean_account_name(account: str) -> str:
     return account
 
 
-def get_token(conn: Optional[str] = None, lifetime: dt.timedelta = LIFETIME, config_file: Path = SFCONN_CONFIG_FILE) -> str:
+def get_token(conn: str | None = None, lifetime: dt.timedelta = LIFETIME, config_file: Path = SFCONN_CONFIG_FILE) -> str:
     """get a JWT when using key-pair authentication
 
     Args

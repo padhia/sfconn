@@ -3,7 +3,7 @@ import logging
 from argparse import SUPPRESS, ArgumentParser, ArgumentTypeError
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable
 
 from .conn import SFCONN_CONFIG_FILE, conn_opts, getconn_checked
 
@@ -27,11 +27,11 @@ def entry(fn: Callable[..., None]) -> Callable[..., None]:
     @wraps(fn)
     def wrapped(
         config_file: Path,
-        conn: Optional[str],
-        database: Optional[str],
-        role: Optional[str],
-        schema: Optional[str],
-        warehouse: Optional[str],
+        conn: str | None,
+        database: str | None,
+        role: str | None,
+        schema: str | None,
+        warehouse: str | None,
         loglevel: int,
         **kwargs: Any,
     ) -> None:
@@ -54,11 +54,11 @@ def entry_opts(fn: Callable[..., None]) -> Callable[..., None]:
     @wraps(fn)
     def wrapped(
         config_file: Path,
-        conn: Optional[str],
-        database: Optional[str],
-        role: Optional[str],
-        schema: Optional[str],
-        warehouse: Optional[str],
+        conn: str | None,
+        database: str | None,
+        role: str | None,
+        schema: str | None,
+        warehouse: str | None,
         loglevel: int,
         **kwargs: Any,
     ) -> None:
@@ -96,12 +96,12 @@ def add_conn_args(parser: ArgumentParser, config_file: Path = SFCONN_CONFIG_FILE
     )
 
 
-def args(doc: Optional[str], config_file: Path = SFCONN_CONFIG_FILE, **kwargs: Any) -> Callable[..., Callable[..., Any]]:
+def args(doc: str | None, config_file: Path = SFCONN_CONFIG_FILE, **kwargs: Any) -> Callable[..., Callable[..., Any]]:
     """Function decorator that instantiates and adds snowflake database connection arguments"""
 
     def getargs(fn: Callable[[ArgumentParser], None]) -> Callable[..., Any]:
         @wraps(fn)
-        def wrapped(args: Optional[List[str]] = None) -> Any:
+        def wrapped(args: list[str] | None = None) -> Any:
             parser = ArgumentParser(description=doc, **kwargs)
             fn(parser)
             add_conn_args(parser, config_file=config_file)

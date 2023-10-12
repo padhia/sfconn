@@ -9,7 +9,7 @@ from configparser import ConfigParser
 from functools import cache
 from getpass import getpass as askpass
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Mapping
 
 from snowflake.connector import connect  # type: ignore
 
@@ -37,7 +37,7 @@ def getpass(host: str, user: str) -> str:
 
 
 @cache
-def load_config(config_file: Path = SFCONN_CONFIG_FILE) -> Dict[Optional[str], Dict[str, Any]]:
+def load_config(config_file: Path = SFCONN_CONFIG_FILE) -> dict[str | None, dict[str, Any]]:
     """load connections from configuration file
 
     Args:
@@ -67,10 +67,10 @@ def load_config(config_file: Path = SFCONN_CONFIG_FILE) -> Dict[Optional[str], D
                 val = val[1:-1].replace("\\'", "'").replace('\\"', '"')
         return (key, val)
 
-    def conn_name(name: str) -> Optional[str]:
+    def conn_name(name: str) -> str | None:
         return name[12:] if name.startswith("connections.") else None
 
-    def conn_opts(section: Mapping[str, Any]) -> Dict[str, Any]:
+    def conn_opts(section: Mapping[str, Any]) -> dict[str, Any]:
         return dict(dbapi_opt(k, v) for k, v in section.items())
 
     if not config_file.is_file():
@@ -83,8 +83,8 @@ def load_config(config_file: Path = SFCONN_CONFIG_FILE) -> Dict[Optional[str], D
 
 
 def conn_opts(
-    name: Optional[str] = None, config_file: Path = SFCONN_CONFIG_FILE, expand_private_key: bool = True, **overrides: Any
-) -> Dict[str, Any]:
+    name: str | None = None, config_file: Path = SFCONN_CONFIG_FILE, expand_private_key: bool = True, **overrides: Any
+) -> dict[str, Any]:
     """return unified connection options
 
     Args:
@@ -131,7 +131,7 @@ def conn_opts(
     return opts
 
 
-def getconn(name: Optional[str] = None, **overrides: Any) -> Connection:
+def getconn(name: str | None = None, **overrides: Any) -> Connection:
     """connect to Snowflake database using named configuration
 
     Args
@@ -150,7 +150,7 @@ def getconn(name: Optional[str] = None, **overrides: Any) -> Connection:
     return connect(**conn_opts(name, **overrides))
 
 
-def getconn_checked(name: Optional[str] = None, **overrides: Any) -> Connection:
+def getconn_checked(name: str | None = None, **overrides: Any) -> Connection:
     """same as getconn(), but terminates the current application if an exception is thrown
 
     Args

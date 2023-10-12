@@ -3,7 +3,7 @@ import json
 from argparse import ArgumentParser
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable
 
 from .conn import conn_opts, getconn_checked, load_config
 from .jwt import LIFETIME, get_token
@@ -19,7 +19,7 @@ def list_conn(config_file: Path, **_: Any) -> None:
     "list all connections"
     cfg = load_config(config_file)
 
-    lines: List[tuple[str, str, str]] = [("Conn", "Account", "User")]
+    lines: list[tuple[str, str, str]] = [("Conn", "Account", "User")]
     lines.extend(sorted(("" if name is None else name, opts["account"], opts.get("user", "")) for name, opts in cfg.items()))
 
     w = [max(len(r[c]) for r in lines) for c in [0, 1, 2]]
@@ -33,7 +33,7 @@ def list_conn(config_file: Path, **_: Any) -> None:
             printf("-" * w[0], "-" * w[1], "-" * w[2])
 
 
-def test_conn(conn: Optional[str], save: bool = False, **kwargs: Any) -> None:
+def test_conn(conn: str | None, save: bool = False, **kwargs: Any) -> None:
     "test connection"
     try:
         opts = conn_opts(conn, **kwargs)
@@ -46,7 +46,7 @@ def test_conn(conn: Optional[str], save: bool = False, **kwargs: Any) -> None:
         print(f"connection to '{opts['account']}' successful!")
 
 
-def as_json(conn: Optional[str], export_all: Optional[Path], config_file: Path, **kwargs: Any) -> None:
+def as_json(conn: str | None, export_all: Path | None, config_file: Path, **kwargs: Any) -> None:
     "convert connection info to json"
 
     class PathJsonEncoder(json.JSONEncoder):
@@ -75,7 +75,7 @@ def as_json(conn: Optional[str], export_all: Optional[Path], config_file: Path, 
         jsonf.write_text(json.dumps(opts, cls=PathJsonEncoder, indent=2) + "\n")
 
 
-def get_jwt(conn: Optional[str], config_file: Path, lifetime: timedelta, **kwargs: Any) -> None:
+def get_jwt(conn: str | None, config_file: Path, lifetime: timedelta, **kwargs: Any) -> None:
     "get a JWT"
     try:
         print(get_token(conn, config_file=config_file, lifetime=lifetime))
