@@ -5,17 +5,19 @@ Snowflake connection helper functions
 
 A Python library to simplify connecting to Snowflake databases by leveraging connection options specified in [SnowSQL](https://docs.snowflake.com/en/user-guide/snowsql.html) configuration file (`~/.snowsql/config`).
 
-**Notes** Following are some minor differences between the way `SnowSQL` interprets connection options v/s `sfconn` library:
-1. `sfconn` library supports setting `SFCONN` environment variable to be used as a default connection name before searching for a default connection entry in the config file.
-1. SnowSQL doesn't (yet) allow `private_key_path` to contain home-anchored paths (e.g. `~/keys/key.p8`), but `sfconn` library does
-1. SnowSQL treats relative paths as relative to working directory of the running process, whereas, `sfconn` library by default evaluates relative paths as relative to the config file location. If SnowSQL-like behavior is needed, do either of the following:
-    - before any other calls to `sfconn` library, include following code
-    ```python
-    import sfconn
+**Notes**
+1. Recent [snowflake-connector-python](https://github.com/snowflakedb/snowflake-connector-python) package [supports](https://github.com/snowflakedb/snowflake-connector-python/releases/tag/v3.6.0) `private_key_file` as a parameter to the `connect()` function, and the ability to use [named connections](https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-connect#connecting-using-the-connections-toml-file). Lack of these features were some of the major reasons for this package to exist. If you don't need any other functionality offered by this package then you should rely on the latest `snowflake-connector-python` package.
+1. Following are some minor differences between the way `SnowSQL` interprets connection options v/s `sfconn` library:
+	- `sfconn` library supports setting `SFCONN` environment variable to be used as a default connection name before searching for a default connection entry in the config file.
+	- SnowSQL doesn't (yet) allow `private_key_path` to contain home-anchored paths (e.g. `~/keys/key.p8`), but `sfconn` library does
+	- SnowSQL treats relative paths as relative to working directory of the running process, whereas, `sfconn` library by default evaluates relative paths as relative to the config file location. If SnowSQL-like behavior is needed, do either of the following:
+		- before any other calls to `sfconn` library, include following code
+			```python
+			import sfconn
 
-    sfconn.conn.relpath_anchor_is_cwd = True
-    ```
-    - set `SFCONN_RELPATH_ANCHOR_CWD=1` environment variable
+			sfconn.conn.relpath_anchor_is_cwd = True
+			```
+		- set `SFCONN_RELPATH_ANCHOR_CWD=1` environment variable
 
 # Installation
 
