@@ -10,42 +10,24 @@ jobs:
     name: build a binary distribution
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
 
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
 
-    - name: setup python
-      uses: actions/setup-python@v2
-      with:
-        python-version: 3.8
+      - name: install setuptools
+        run: python -m pip install --upgrade pip setuptools wheel build
 
-    - name: install setuptools
-      run: python -m pip install --upgrade pip setuptools wheel
+      - name: build
+        run: python -m build
 
-    - name: build new distribution
-      run: |
-        python setup.py bdist_wheel
-        echo "PKGVER=$(python setup.py --version)" >> $GITHUB_ENV
-        echo "PKGNAME=$(python setup.py --name)" >> $GITHUB_ENV
+      - name: perform linting
+        uses: chartboost/ruff-action@v1
 
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        draft: false
-        prerelease: true
-
-    - name: Upload wheel as an asset
-      id: upload-release-asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/${{ env.PKGNAME }}-${{ env.PKGVER }}-py3-none-any.whl
-        asset_name: ${{ env.PKGNAME }}-${{ env.PKGVER }}-py3-none-any.whl
-        asset_content_type: application/x-python-wheel
+      - name: release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: dist/*
