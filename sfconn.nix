@@ -2,7 +2,7 @@
 
 buildPythonPackage rec {
   pname = "sfconn";
-  version = "0.2.5";
+  version = "0.3.0";
   src = ./.;
   format = "pyproject";
 

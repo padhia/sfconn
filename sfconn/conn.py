@@ -1,137 +1,99 @@
-"get snowflake connection using snowsql connection configuration"
+"get a snowflake connection using connections.toml configuration with added convenience methods"
 from __future__ import annotations
 
 import logging
 import os
-import re
-import sys
-from configparser import ConfigParser
-from functools import cache
-from getpass import getpass as askpass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Self, cast
 
-from snowflake.connector import connect  # type: ignore
+from snowflake.connector.config_manager import CONFIG_MANAGER
+from snowflake.connector.connection import SnowflakeConnection, SnowflakeCursor
+from snowflake.connector.errors import Error
 
-from .privkey import PrivateKey
-from .types import Connection
+from .cursor import Cursor
 
-try:
-    from keyring import get_password
-except ImportError:
-    get_password = None
-
-SFCONN_CONFIG_FILE = Path(_p) if (_p := os.environ.get("SFCONN_CONFIG_FILE")) is not None else Path.home() / ".snowsql" / "config"
-AUTH_KWDS = ["password", "token", "passcode", "private_key", "private_key_path"]
-
-relpath_anchor_is_cwd = os.environ.get("SFCONN_RELPATH_ANCHOR_CWD", "0").upper() in ["YES", "1", "TRUE", "Y"]
 logger = logging.getLogger(__name__)
 
 
-def getpass(host: str, user: str) -> str:
-    "return password from user's keyring if found; else prompt for it"
-    if get_password is not None and (passwd := get_password(host, user)) is not None:
-        logger.debug("Using password from user's keyring: %s@%s", user, host)
-        return passwd
-    return askpass(f"Password '{user}@{host}': ")
+def _parse_keyfile_pfx_map() -> tuple[Path, Path] | None:
+    if (x := os.environ.get("SFCONN_KEYFILE_PFX_MAP")) is None:
+        return None
+
+    try:
+        from_pfx, to_pfx = x.split(":")
+        return (Path(from_pfx), Path(to_pfx))
+    except ValueError:
+        pass
+
+    logger.error(f"Bad value ('{x}') for $SFCONN_KEYFILE_PFX_MAP ignored, must have a pair of paths specified as'<path>:<path>'")
 
 
-@cache
-def load_config(config_file: Path = SFCONN_CONFIG_FILE) -> dict[str | None, dict[str, Any]]:
-    """load connections from configuration file
+_default_keyfile_pfx_map = _parse_keyfile_pfx_map()
 
-    Args:
-        config_file: Configuration file containing connection entries, optiional, defaults to ~/.snowsql/config
 
+class Connection(SnowflakeConnection):
+    "A Connection class that overrides the cursor() method to return a custom Cursor class"
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *args: Any, **kwargs: Any):
+        return super().__exit__(*args, **kwargs)
+
+    def cursor(self, cursor_class: type[SnowflakeCursor] = Cursor) -> Cursor:
+        return cast(Cursor, super().cursor(cursor_class))
+
+
+def connection_names() -> list[str]:
+    """returns names of available connections
     Returns:
-        dictionary of connection names and dictionary of options
-
-    Raises:
-        FileNotFoundError: If the config_file doesn't exist or not a file
-        MissingSectionHeaderError: If config_file doesn't contain any section, or is invalid
+        list of connection names
     """
-
-    def dbapi_opt(key: str, val: str) -> tuple[str, Any]:
-        "convert snowsql connection option to corresponding python DB API connect() option"
-        if (m := re.fullmatch("(user|role|account|schema|warehouse)name", key)) is not None:
-            return (m.group(1), val)
-        if key == "dbname":
-            return ("database", val)
-        if key == "private_key_path":
-            path = Path(val).expanduser()
-            if not path.is_absolute():
-                path = (Path.cwd() if relpath_anchor_is_cwd else config_file.parent) / path
-            return (key, path)
-        if key == "password":
-            if val[0] == '"' and val[-1] == '"' or val[0] == "'" and val[-1] == "'":
-                val = val[1:-1].replace("\\'", "'").replace('\\"', '"')
-        return (key, val)
-
-    def conn_name(name: str) -> str | None:
-        return name[12:] if name.startswith("connections.") else None
-
-    def conn_opts(section: Mapping[str, Any]) -> dict[str, Any]:
-        return dict(dbapi_opt(k, v) for k, v in section.items())
-
-    if not config_file.is_file():
-        raise FileNotFoundError(f"{config_file} does not exist or is not a file")
-
-    conf = ConfigParser()
-    conf.read(config_file)
-
-    return {conn_name(name): conn_opts(conf[name]) for name in conf.sections() if name.startswith("connections")}
+    return list(cast(dict[str, dict[str, Any]], CONFIG_MANAGER["connections"]).keys())
 
 
 def conn_opts(
-    name: str | None = None, config_file: Path = SFCONN_CONFIG_FILE, expand_private_key: bool = True, **overrides: Any
+    connection_name: str | None = None,
+    keyfile_pfx_map: tuple[Path, Path] | None = None,
+    **overrides: Any,
 ) -> dict[str, Any]:
-    """return unified connection options
+    """returns connection options with overrides applied, if suplied
 
     Args:
         name: A connection name to be looked up from the config_file; value can be None
-        config_file: Configuration file containing connection entries, defaults to ~/.snowsql/config
-        expand_private_key: whether to read private_key_path, if present; default True
+        keyfile_pfx_map: if specified must be a a pair of Path values specified as <from-path>:<to-path>,
+           which will be used to change private_key_file path value if it starts with <from-pahd> prefix
         **overrides: A valid Snowflake python connector parameter; when not-None, will override value read from config_file
 
     Returns:
         dictionary containing option name and it's value
 
     Raises:
-        KeyError: when connection name lookup fails
-        *: any exceptions raised by load_config() are passed through
+        *: any exceptions raised by snowflake.connector are passed through
     """
-    if name is None:
-        name = os.environ.get("SFCONN")
-    conf_opts = load_config(config_file).get(name)
-    if conf_opts is None:
-        if name is None:
-            raise KeyError("Connection name required (otherwise, either set SFCONN=<conn> or define a default connection)")
-        else:
-            raise KeyError(f"'{name}' is not a configured connection in '{config_file}'")
+    if keyfile_pfx_map is None:
+        keyfile_pfx_map = _default_keyfile_pfx_map
 
-    opts = dict(conf_opts, **{k: v for k, v in overrides.items() if v is not None})
+    def fix_keyfile_path(path: str) -> str:
+        if keyfile_pfx_map is not None and (p := Path(path)).is_relative_to(keyfile_pfx_map[0]):
+            return str(keyfile_pfx_map[1] / p.relative_to(keyfile_pfx_map[0]))
+        return path
 
-    if logger.getEffectiveLevel() <= logging.DEBUG:
-        logger.debug("getcon() options: %s", {k: v if k not in AUTH_KWDS else "*****" for k, v in opts.items()})
+    connections = cast(dict[str, dict[str, Any]], CONFIG_MANAGER["connections"])
+    if connection_name is None:
+        connection_name = cast(str, CONFIG_MANAGER["default_connection_name"])
 
-    if expand_private_key and "private_key_path" in opts:
-        opts["private_key"] = PrivateKey(opts["private_key_path"]).pri_bytes
-        del opts["private_key_path"]
+    if connection_name not in connections:
+        raise Error(f"Invalid connection name '{connection_name}', select from [{', '.join(connections.keys())}]")
 
-    has_login = all(o in opts for o in ["user", "account"])
-    has_auth = any(o in opts for o in AUTH_KWDS)
-
-    if has_login and not has_auth and opts.get("authenticator") != "externalbrowser":
-        opts["password"] = getpass(opts["account"], opts["user"])
-
-    # set application name if not already specified and one is available
-    if "application" not in overrides and sys.argv[0] and (app_name := Path(sys.argv[0]).name):
-        opts["application"] = app_name
+    opts = {**connections[connection_name], **{k: v for k, v in overrides.items() if v is not None}}
+    if "private_key_file" in opts:
+        opts["private_key_file"] = fix_keyfile_path(cast(str, opts["private_key_file"]))
 
     return opts
 
 
-def getconn(name: str | None = None, **overrides: Any) -> Connection:
+def getconn(connection_name: str | None = None, **overrides: Any) -> Connection:
     """connect to Snowflake database using named configuration
 
     Args
@@ -140,27 +102,5 @@ def getconn(name: str | None = None, **overrides: Any) -> Connection:
 
     Returns:
         Connection object returned by Snowflake python connector
-
-    Exceptions:
-        KeyError: when connection name lookup fails
-        FileNotFoundError: If the config_file doesn't exist or not a file (from conn_opts())
-        MissingSectionHeaderError: If config_file doesn't contain any section, or is invalid (from conn_opts)
-        InterfaceError/DatabaseError: from snowflake.connector.connect()
     """
-    return connect(**conn_opts(name, **overrides))
-
-
-def getconn_checked(name: str | None = None, **overrides: Any) -> Connection:
-    """same as getconn(), but terminates the current application if an exception is thrown
-
-    Args
-        name: A connection name to be looked up from the config_file, optional defaults to None for default connection
-        **overrides: Any parameter that is valid for conn_opts() method; see conn_opts() documentation
-
-    Returns:
-        Connection object returned by Snowflake python connector
-    """
-    try:
-        return getconn(name, **overrides)
-    except Exception as err:
-        raise SystemExit(err)
+    return Connection(**conn_opts(connection_name, **overrides))  # type: ignore

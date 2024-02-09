@@ -5,87 +5,107 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, Callable
 
-from .conn import SFCONN_CONFIG_FILE, conn_opts, getconn_checked
+from .conn import conn_opts, getconn
 
-logger = logging.getLogger(__name__)
 _loglevel = logging.WARNING
-_rootpkg = ".".join(__name__.split(".")[:-1])
 
 
-def init_logging(pkgname: str = _rootpkg) -> None:
+def init_logging(logger: logging.Logger) -> None:
     "initialize the logging system"
     h = logging.StreamHandler()
     h.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
-    logger = logging.getLogger(pkgname)
     logger.addHandler(h)
     logger.setLevel(_loglevel)
 
 
-def entry(fn: Callable[..., None]) -> Callable[..., None]:
+def with_connection_options(
+    fl: Callable[..., None] | logging.Logger | None = None,
+) -> Callable[..., None] | Callable[[Callable[..., None]], Callable[..., None]]:
     "wraps application entry function that expects a connection"
 
-    @wraps(fn)
-    def wrapped(
-        config_file: Path,
-        conn: str | None,
-        database: str | None,
-        role: str | None,
-        schema: str | None,
-        warehouse: str | None,
-        loglevel: int,
-        **kwargs: Any,
-    ) -> None:
-        "script entry-point"
-        global _loglevel
+    logger: logging.Logger | None = None
 
-        _loglevel = loglevel
-        init_logging()
-        with getconn_checked(
-            conn, config_file=config_file, database=database, role=role, schema=schema, warehouse=warehouse
-        ) as cnx:
-            return fn(cnx, **kwargs)
+    def wrapper(fn: Callable[..., None]) -> Callable[..., None]:
+        @wraps(fn)
+        def wrapped(
+            keyfile_pfx_map: tuple[Path, Path] | None,
+            connection_name: str | None,
+            database: str | None,
+            role: str | None,
+            schema: str | None,
+            warehouse: str | None,
+            loglevel: int,
+            **kwargs: Any,
+        ) -> None:
+            "script entry-point"
+            global _loglevel
 
-    return wrapped
+            _loglevel = loglevel
+            init_logging(logging.getLogger(__name__))
+            if logger is not None:
+                init_logging(logger)
+            _opts = conn_opts(
+                connection_name,
+                keyfile_pfx_map=keyfile_pfx_map,
+                database=database,
+                role=role,
+                schema=schema,
+                warehouse=warehouse,
+            )
+            return fn(_opts, **kwargs)
+
+        return wrapped
+
+    if fl is None or isinstance(fl, logging.Logger):
+        logger = fl
+        return wrapper
+
+    return wrapper(fl)
 
 
-def entry_opts(fn: Callable[..., None]) -> Callable[..., None]:
+def with_connection(
+    fl: Callable[..., None] | logging.Logger | None = None,
+) -> Callable[..., None] | Callable[[Callable[..., None]], Callable[..., None]]:
     "wraps application entry function that expects a connection"
 
-    @wraps(fn)
-    def wrapped(
-        config_file: Path,
-        conn: str | None,
-        database: str | None,
-        role: str | None,
-        schema: str | None,
-        warehouse: str | None,
-        loglevel: int,
-        **kwargs: Any,
-    ) -> None:
-        "script entry-point"
-        global _loglevel
+    logger = fl if isinstance(fl, logging.Logger) else None
 
-        _loglevel = loglevel
-        init_logging()
-        _opts = conn_opts(conn, config_file=config_file, database=database, role=role, schema=schema, warehouse=warehouse)
-        return fn(_opts, **kwargs)
+    def wrapper(fn: Callable[..., None]) -> Callable[..., None]:
+        @with_connection_options(logger)
+        @wraps(fn)
+        def wrapped(opts: dict[str, Any], **kwargs: Any) -> None:
+            "script entry-point"
+            try:
+                with getconn(**opts) as cnx:
+                    return fn(cnx, **kwargs)
+            except Exception as err:
+                raise SystemExit(str(err))
 
-    return wrapped
+        return wrapped  # type: ignore
+
+    if fl is None or isinstance(fl, logging.Logger):
+        logger = fl
+        return wrapper
+
+    return wrapper(fl)
 
 
-def add_conn_args(parser: ArgumentParser, config_file: Path = SFCONN_CONFIG_FILE) -> None:
+def add_conn_args(parser: ArgumentParser) -> None:
     "add default arguments"
 
-    def existing_file(arg: str) -> Path:
-        if (p := Path(arg)).is_file():
-            return p
-        raise ArgumentTypeError(f"{arg} does not exist or not a file")
+    def path_pair(v: str) -> tuple[Path, Path]:
+        try:
+            from_pfx, to_pfx = v.split(":")
+            return (Path(from_pfx), Path(to_pfx))
+        except ValueError:
+            pass
+        raise ArgumentTypeError(f"'{v}' is not a valid value, must specify a pair of paths as'<from-path>:<to-path>'")
 
     g = parser.add_argument_group("connection parameters")
     g.add_argument(
-        "--config-file", metavar="", type=existing_file, default=config_file, help=f"configuration file (default: {config_file})"
+        "--keyfile-pfx-map", type=path_pair, help="change private_key_file path prefix (format: <from-path>:<to-path>)"
     )
-    g.add_argument("-c", "--conn", metavar="", help="connection name")
+    g.add_argument("-c", "--conn", dest="connection_name", help="connection name")
     g.add_argument("--database", metavar="", help="override or set the default database")
     g.add_argument("--role", metavar="", help="override or set the default role")
     g.add_argument("--schema", metavar="", help="override or set the default schema")
@@ -96,15 +116,15 @@ def add_conn_args(parser: ArgumentParser, config_file: Path = SFCONN_CONFIG_FILE
     )
 
 
-def args(doc: str | None, config_file: Path = SFCONN_CONFIG_FILE, **kwargs: Any) -> Callable[..., Callable[..., Any]]:
+def with_connection_args(doc: str | None, **kwargs: Any) -> Callable[..., Callable[..., Any]]:
     """Function decorator that instantiates and adds snowflake database connection arguments"""
 
     def getargs(fn: Callable[[ArgumentParser], None]) -> Callable[..., Any]:
         @wraps(fn)
         def wrapped(args: list[str] | None = None) -> Any:
             parser = ArgumentParser(description=doc, **kwargs)
+            add_conn_args(parser)
             fn(parser)
-            add_conn_args(parser, config_file=config_file)
             return parser.parse_args(args)
 
         return wrapped

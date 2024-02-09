@@ -3,10 +3,11 @@ import base64
 import datetime as dt
 import hashlib
 from pathlib import Path
+from typing import cast
 
 import jwt
 
-from .conn import SFCONN_CONFIG_FILE, conn_opts
+from .conn import conn_opts
 from .privkey import PrivateKey
 
 LIFETIME = dt.timedelta(minutes=59)  # The tokens will have a 59 minute lifetime
@@ -32,13 +33,12 @@ def _clean_account_name(account: str) -> str:
     return account
 
 
-def get_token(conn: str | None = None, lifetime: dt.timedelta = LIFETIME, config_file: Path = SFCONN_CONFIG_FILE) -> str:
+def get_token(connection_name: str | None = None, lifetime: dt.timedelta = LIFETIME) -> str:
     """get a JWT when using key-pair authentication
 
     Args
         conn: A connection name to be looked up from the config_file, optional, default to None for the default connection
         lifetime: issued token's lifetime
-        config_path: configuration file, defaults to ~/.snowsql/config
 
     Returns:
         a JWT
@@ -48,13 +48,14 @@ def get_token(conn: str | None = None, lifetime: dt.timedelta = LIFETIME, config
         *: Any exceptions raised by either conn_opts() or class PrivateKey
     """
 
-    opts = conn_opts(conn, config_file=config_file, expand_private_key=False)
-    if (keyf := opts.get("private_key_path")) is None:
-        raise ValueError(f"'{conn}' does not use key-pair authentication to support creating a JWT")
+    opts = conn_opts(connection_name)
+    keyf = cast(str | None, opts.get("private_key_file"))
+    if keyf is None:
+        raise ValueError(f"'{connection_name}' does not use key-pair authentication to support creating a JWT")
 
     qual_user = f"{_clean_account_name(opts['account']).upper()}.{opts['user'].upper()}"
 
-    key = PrivateKey(keyf)
+    key = PrivateKey(Path(keyf))
     now = dt.datetime.now()
 
     payload = {

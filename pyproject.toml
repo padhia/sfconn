@@ -9,12 +9,12 @@ authors = [
 ]
 description = "Snowflake connection helper functions"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
 ]
 dependencies = [
-    "snowflake-connector-python",
+    "snowflake-connector-python>=3.7.0",
 ]
 dynamic = ["version"]
 
@@ -31,4 +31,8 @@ version = {attr = "sfconn.__version__"}
 
 [tool.ruff]
 line-length = 130
-target-version = "py310"
+target-version = "py311"
+extend-select = ["I"]
+
+[tool.pytest.ini_options]
+pythonpath = [ "." ]
