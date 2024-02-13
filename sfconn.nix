@@ -4,7 +4,7 @@ buildPythonPackage rec {
   pname = "sfconn";
   version = "0.3.0";
   src = ./.;
-  format = "pyproject";
+  pyproject = true;
 
   propagatedBuildInputs = [
     snowflake-connector-python

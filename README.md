@@ -113,7 +113,7 @@ def with_connection_option(logger = None) => Callable([dict[str, Any, ...]])
 
 `with_connection_args()` decorator function:
 1. builds an `ArgumentParser` object
-1. adds common Snowflake connection options as arguments that allow overriding values specified in `~/.snowsql/config`
+1. adds common Snowflake connection options as arguments including overriding role, database, schema and warehouse
 1. calls the decorated function with the parser object to allow adding any script specific options
 
 `with_connection()` decorator function:
@@ -154,6 +154,5 @@ Function `sfconn.get_token()` returns a JWT token for connections that use `priv
 
 ```python
 from sfconn import get_token
-
-# assuming 'dev' is a connection defined in ~/.snowflake/config and uses key-pair authentication
-jwt_token = get_token('dev', 120)  # get a token valid for 120 minutes
+jwt_token = get_token(None, 120)  # get token using default (None) connection, and valid for 120 minutes
+```
