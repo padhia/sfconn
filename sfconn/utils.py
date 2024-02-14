@@ -1,9 +1,14 @@
 "Utility functions"
+import datetime as dt
 import logging
 from argparse import SUPPRESS, ArgumentParser, ArgumentTypeError
+from decimal import Decimal
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, cast
+
+from snowflake.connector.constants import FIELD_TYPES
+from snowflake.connector.cursor import ResultMetadata
 
 from .conn import conn_opts, getconn
 
@@ -118,3 +123,38 @@ def with_connection_args(doc: str | None, **kwargs: Any) -> Callable[..., Callab
         return wrapped
 
     return getargs
+
+
+def pytype(meta: ResultMetadata, best_match: bool = False) -> type[Any]:
+    """convert Python DB API data type to python type
+
+    Args:
+        meta: an individual value returned as part of cursor.description
+        best_match: return Python type that is best suited, rather than the actual type used by the connector
+
+    Returns:
+        Python type that best matches Snowflake's type, or str in other cases
+    """
+    TYPE_MAP: dict[str, type[Any]] = {
+        "TEXT": str,
+        "REAL": float,
+        "DATE": dt.date,
+        "TIME": dt.time,
+        "TIMESTAMP_NTZ": dt.datetime,
+        "TIMESTAMP_LTZ": dt.datetime,
+        "TIMESTAMP_TZ": dt.datetime,
+        "BOOLEAN": bool,
+        "OBJECT": dict,
+        "VARIANT": object,
+        "ARRAY": list,
+        "BINARY": bytearray,
+    }
+
+    sql_type_name = cast(str, FIELD_TYPES[meta.type_code].name)  # type: ignore
+
+    if sql_type_name == "FIXED":
+        return int if meta.scale == 0 else Decimal
+
+    type_ = TYPE_MAP.get(sql_type_name, str)
+
+    return type_ if best_match else str if type_ in [dict, object, list] else type_

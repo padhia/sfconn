@@ -7,6 +7,8 @@ from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 from OpenSSL.crypto import TYPE_RSA, PKey  # type: ignore
 from snowflake.connector.config_manager import CONFIG_MANAGER
 
+from sfconn import getconn
+
 
 def _write_config(config_file: Path, **args: str) -> Path:
     opts = "".join(f'{k} = "{v}"\n' for k, v in args.items())
@@ -49,3 +51,9 @@ def config_password(tmp_path: Path) -> Path:
     return _write_config(
         tmp_path / "config_password", account="sfdev", user="dev_user", authenticator="SNOWFLAKE", password="12345"
     )
+
+
+@pytest.fixture(scope="session")
+def cnx():
+    with getconn() as conn:
+        yield conn

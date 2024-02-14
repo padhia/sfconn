@@ -2,53 +2,60 @@
   description = "Snowflake connection helper functions";
 
   inputs = {
-    nixpkgs.url   = "github:nixos/nixpkgs/nixos-unstable";
-    snowflake.url = "github:padhia/snowflake";
+    nixpkgs.url     = "github:nixos/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+    snowflake.url   = "github:padhia/snowflake";
     snowflake.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = { self, nixpkgs, flake-utils, snowflake }:
+  flake-utils.lib.eachDefaultSystem (system:
   let
-    forAllSystems = fn:
-      let
-        systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
-      in
-        nixpkgs.lib.genAttrs systems (system: fn (import nixpkgs { inherit system; }));
+    pkgs    = nixpkgs.legacyPackages.${system};
+    pythons = ["python311" "python312"];
+    python3 = pkgs.lib.replaceStrings ["."] [""] pkgs.python3.libPrefix;
 
-    pyPkgs = { pkgs, python3 }:
-      let
-        callPackage = pkgs.lib.callPackageWith (pkgs // python3.pkgs // allPyPkgs);
-        allPyPkgs = (snowflake.pyPkgs { inherit pkgs python3; }) // { sfconn = callPackage ./sfconn.nix {}; };
-      in { inherit (allPyPkgs) sfconn snowflake-connector-python; };
+    pyPkgsDep = py: {
+      inherit (snowflake.packages.${system}.${"${py}Packages"}) snowflake-connector-python;
+    };
 
-    devShells = forAllSystems( pkgs: with pkgs;
+    pyPkgs = py:
       let
-        python3  = pkgs.python311;
-        sfPyPkgs = pyPkgs { inherit pkgs python3; };
-
+        callPackage = pkgs.lib.callPackageWith (pkgs.${py}.pkgs // (pyPkgsDep py));
       in {
-        default = pkgs.mkShell {
-          name = "sfconn";
-          venvDir = "./.venv";
-          buildInputs = with pkgs.python311Packages; [
-            python
-            venvShellHook
-            build
-            pytest
-            pkgs.ruff
-            sfPyPkgs.snowflake-connector-python
-          ];
-        };
-      }
-    );
+        sfconn    = callPackage ./sfconn.nix {};
+        sfconn02x = callPackage ./sfconn02x.nix {};
+       };
 
-    packages = forAllSystems (pkgs: with pkgs;
+    devShells =
       let
-        default = (pyPkgs { inherit pkgs; python3 = python311; }).sfconn;
-      in { inherit default; }
-    );
+        mkDevShell = py:
+          pkgs.mkShell {
+            name = "sfconn";
+            venvDir = "./.venv";
+            buildInputs = with pkgs.${py}.pkgs; [
+              pkgs.${py}
+              pkgs.ruff
+              venvShellHook
+              build
+              pytest
+              (pyPkgsDep py).snowflake-connector-python
+            ];
+          };
+
+        allPys = pkgs.lib.genAttrs pythons mkDevShell;
+
+      in
+        allPys // { default = allPys.${python3}; };
+
+    packages = with pkgs.lib;
+      let
+        allPys  = genAttrs pythons pyPkgs;
+        allPkgs = mapAttrs' (k: v: nameValuePair (k + "Packages") v) allPys;
+      in
+        allPkgs // { default = allPkgs.${python3 + "Packages"}.sfconn; };
 
   in {
-    inherit devShells packages pyPkgs;
-  };
+    inherit devShells packages;
+  });
 }
