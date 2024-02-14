@@ -18,14 +18,12 @@ def init_logging(logger: logging.Logger) -> None:
     logger.setLevel(_loglevel)
 
 
-def with_connection_options(
-    fl: Callable[..., None] | logging.Logger | None = None,
-) -> Callable[..., None] | Callable[[Callable[..., None]], Callable[..., None]]:
+def with_connection_options(fl: Callable[..., Any] | logging.Logger | None = None) -> Callable[..., Any]:
     "wraps application entry function that expects a connection"
 
-    logger: logging.Logger | None = None
+    logger = fl if isinstance(fl, logging.Logger) else None
 
-    def wrapper(fn: Callable[..., None]) -> Callable[..., None]:
+    def wrapper(fn: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(fn)
         def wrapped(
             keyfile_pfx_map: tuple[Path, Path] | None,
@@ -36,7 +34,7 @@ def with_connection_options(
             warehouse: str | None,
             loglevel: int,
             **kwargs: Any,
-        ) -> None:
+        ) -> Any:
             "script entry-point"
             global _loglevel
 
@@ -56,24 +54,18 @@ def with_connection_options(
 
         return wrapped
 
-    if fl is None or isinstance(fl, logging.Logger):
-        logger = fl
-        return wrapper
-
-    return wrapper(fl)
+    return wrapper if fl is None or isinstance(fl, logging.Logger) else wrapper(fl)
 
 
-def with_connection(
-    fl: Callable[..., None] | logging.Logger | None = None,
-) -> Callable[..., None] | Callable[[Callable[..., None]], Callable[..., None]]:
+def with_connection(fl: Callable[..., Any] | logging.Logger | None = None) -> Callable[..., Any]:
     "wraps application entry function that expects a connection"
 
     logger = fl if isinstance(fl, logging.Logger) else None
 
-    def wrapper(fn: Callable[..., None]) -> Callable[..., None]:
-        @with_connection_options(logger)
+    def wrapper(fn: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(fn)
-        def wrapped(opts: dict[str, Any], **kwargs: Any) -> None:
+        @with_connection_options(logger)
+        def wrapped(opts: dict[str, Any], **kwargs: Any) -> Any:
             "script entry-point"
             try:
                 with getconn(**opts) as cnx:
@@ -81,13 +73,9 @@ def with_connection(
             except Exception as err:
                 raise SystemExit(str(err))
 
-        return wrapped  # type: ignore
+        return wrapped
 
-    if fl is None or isinstance(fl, logging.Logger):
-        logger = fl
-        return wrapper
-
-    return wrapper(fl)
+    return wrapper if fl is None or isinstance(fl, logging.Logger) else wrapper(fl)
 
 
 def add_conn_args(parser: ArgumentParser) -> None:
