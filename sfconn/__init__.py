@@ -1,5 +1,5 @@
 "connection package"
-__version__ = "0.3.0"
+__version__ = "0.3.1rc1"
 
 from snowflake.connector import DatabaseError, DataError, InterfaceError, ProgrammingError
 from snowflake.connector.cursor import ResultMetadata
