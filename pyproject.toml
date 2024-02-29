@@ -29,9 +29,6 @@ packages = ["sfconn"]
 [tool.setuptools.dynamic]
 version = {attr = "sfconn.__version__"}
 
-[tool.setuptools.package-data]
-"*" = ["py.typed"]
-
 [tool.ruff]
 line-length = 130
 target-version = "py311"
