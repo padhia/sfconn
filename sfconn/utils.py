@@ -1,4 +1,5 @@
 "Utility functions"
+
 import datetime as dt
 import logging
 from argparse import SUPPRESS, ArgumentParser, ArgumentTypeError
@@ -96,7 +97,9 @@ def add_conn_args(parser: ArgumentParser) -> None:
 
     g = parser.add_argument_group("connection parameters")
     g.add_argument(
-        "--keyfile-pfx-map", type=path_pair, help="change private_key_file path prefix (format: <from-path>:<to-path>)"
+        "--keyfile-pfx-map",
+        type=path_pair,
+        help="temporarily change private_key_file path prefix (format: <from-path>:<to-path>)",
     )
     g.add_argument("-c", "--conn", dest="connection_name", help="connection name")
     g.add_argument("--database", metavar="", help="override or set the default database")
