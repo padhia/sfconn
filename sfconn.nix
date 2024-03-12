@@ -8,7 +8,7 @@
 }:
 buildPythonPackage rec {
   pname     = "sfconn";
-  version   = "0.3.1rc1";
+  version   = "0.3.1rc2";
   pyproject = true;
   src       = ./.;
 

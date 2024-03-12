@@ -18,7 +18,8 @@ dependencies = [
 dynamic = ["version"]
 
 [project.optional-dependencies]
-tests = ["pytest"]
+test = ["pytest"]
+snowpark = ["snowflake-snowpark-python"]
 
 [project.urls]
 Homepage = "https://github.com/padhia/sfconn"

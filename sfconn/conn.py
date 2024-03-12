@@ -1,4 +1,5 @@
 "get a snowflake connection using connections.toml configuration with added convenience methods"
+
 from __future__ import annotations
 
 import logging
@@ -44,12 +45,20 @@ class Connection(SnowflakeConnection):
         return cast(Cursor, super().cursor(cursor_class))
 
 
-def connection_names() -> list[str]:
-    """returns names of available connections
+def available_connections() -> dict[str, dict[str, int | str]]:
+    """returns available connections
     Returns:
-        list of connection names
+        dict of connection name and connection options
     """
-    return list(cast(dict[str, dict[str, Any]], CONFIG_MANAGER["connections"]).keys())
+    return cast(dict[str, dict[str, int | str]], CONFIG_MANAGER["connections"])
+
+
+def default_connection_name() -> str:
+    """returns name of the default connection
+    Returns:
+        connection name
+    """
+    return cast(str, CONFIG_MANAGER["default_connection_name"])
 
 
 def conn_opts(
@@ -79,9 +88,9 @@ def conn_opts(
             return str(keyfile_pfx_map[1] / p.relative_to(keyfile_pfx_map[0]))
         return path
 
-    connections = cast(dict[str, dict[str, Any]], CONFIG_MANAGER["connections"])
+    connections = available_connections()
     if connection_name is None:
-        connection_name = cast(str, CONFIG_MANAGER["default_connection_name"])
+        connection_name = default_connection_name()
 
     if connection_name not in connections:
         raise Error(f"Invalid connection name '{connection_name}', select from [{', '.join(connections.keys())}]")
@@ -104,3 +113,24 @@ def getconn(connection_name: str | None = None, **overrides: Any) -> Connection:
         Connection object returned by Snowflake python connector
     """
     return Connection(**conn_opts(connection_name, **overrides))  # type: ignore
+
+
+try:
+    from snowflake.snowpark import Session
+
+    def getsess(connection_name: str | None = None, **overrides: Any) -> Session:
+        """create a Session object using named configuration
+
+        Args
+            name: A connection name to be looked up from the config_file, optional defaults to None for default connection
+            **overrides: Any parameter that is valid for conn_opts() method; see conn_opts() documentation
+
+        Returns:
+            Session object returned by Snowflake python connector
+        """
+        return Session.builder.configs(conn_opts(connection_name, **overrides)).create()
+
+except ImportError:
+
+    def getsess(connection_name: str | None = None, **overrides: Any) -> Session:
+        raise NotImplementedError("Unable to import snowflake.snowpark.Session; is snowflake-snowpark-python installed?")

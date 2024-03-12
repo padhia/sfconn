@@ -11,7 +11,7 @@ from typing import Any, Callable, cast
 from snowflake.connector.constants import FIELD_TYPES
 from snowflake.connector.cursor import ResultMetadata
 
-from .conn import conn_opts, getconn
+from .conn import conn_opts, getconn, getsess
 
 _loglevel = logging.WARNING
 
@@ -84,6 +84,27 @@ def with_connection(fl: Callable[..., Any] | logging.Logger | None = None) -> Ca
     return wrapper if fl is None or isinstance(fl, logging.Logger) else wrapper(fl)
 
 
+def with_session(fl: Callable[..., Any] | logging.Logger | None = None) -> Callable[..., Any]:
+    "wraps application entry function that expects a connection"
+
+    logger = fl if isinstance(fl, logging.Logger) else None
+
+    def wrapper(fn: Callable[..., Any]) -> Callable[..., Any]:
+        @wraps(fn)
+        @with_connection_options(logger)
+        def wrapped(opts: dict[str, Any], **kwargs: Any) -> Any:
+            "script entry-point"
+            try:
+                with getsess(**opts) as session:
+                    return fn(session, **kwargs)
+            except Exception as err:
+                raise SystemExit(str(err))
+
+        return wrapped
+
+    return wrapper if fl is None or isinstance(fl, logging.Logger) else wrapper(fl)
+
+
 def add_conn_args(parser: ArgumentParser) -> None:
     "add default arguments"
 
@@ -96,16 +117,16 @@ def add_conn_args(parser: ArgumentParser) -> None:
         raise ArgumentTypeError(f"'{v}' is not a valid value, must specify a pair of paths as'<from-path>:<to-path>'")
 
     g = parser.add_argument_group("connection parameters")
-    g.add_argument(
-        "--keyfile-pfx-map",
-        type=path_pair,
-        help="temporarily change private_key_file path prefix (format: <from-path>:<to-path>)",
-    )
     g.add_argument("-c", "--conn", dest="connection_name", help="connection name")
     g.add_argument("--database", metavar="", help="override or set the default database")
     g.add_argument("--role", metavar="", help="override or set the default role")
     g.add_argument("--schema", metavar="", help="override or set the default schema")
     g.add_argument("--warehouse", metavar="", help="override or set the default warehouse")
+    g.add_argument(
+        "--keyfile-pfx-map",
+        type=path_pair,
+        help="temporarily change private_key_file path prefix (format: <from-path>:<to-path>, default: $SFCONN_KEYFILE_PFX_MAP)",
+    )
 
     parser.add_argument(
         "--debug", dest="loglevel", action="store_const", const=logging.DEBUG, default=logging.WARNING, help=SUPPRESS
