@@ -117,13 +117,14 @@ def add_conn_args(parser: ArgumentParser) -> None:
         raise ArgumentTypeError(f"'{v}' is not a valid value, must specify a pair of paths as'<from-path>:<to-path>'")
 
     g = parser.add_argument_group("connection parameters")
-    g.add_argument("-c", "--conn", dest="connection_name", help="connection name")
-    g.add_argument("--database", metavar="", help="override or set the default database")
-    g.add_argument("--role", metavar="", help="override or set the default role")
-    g.add_argument("--schema", metavar="", help="override or set the default schema")
-    g.add_argument("--warehouse", metavar="", help="override or set the default warehouse")
+    g.add_argument("-c", "--conn", metavar="NAME", dest="connection_name", help="A connection name from the connections.toml file")
+    g.add_argument("--database", metavar="NAME", help="override or set the default database")
+    g.add_argument("--role", metavar="NAME", help="override or set the default role")
+    g.add_argument("--schema", metavar="NAME", help="override or set the default schema")
+    g.add_argument("--warehouse", metavar="NAME", help="override or set the default warehouse")
     g.add_argument(
         "--keyfile-pfx-map",
+        metavar="PATH:PATH",
         type=path_pair,
         help="temporarily change private_key_file path prefix (format: <from-path>:<to-path>, default: $SFCONN_KEYFILE_PFX_MAP)",
     )
