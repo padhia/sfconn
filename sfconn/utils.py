@@ -117,7 +117,9 @@ def add_conn_args(parser: ArgumentParser) -> None:
         raise ArgumentTypeError(f"'{v}' is not a valid value, must specify a pair of paths as'<from-path>:<to-path>'")
 
     g = parser.add_argument_group("connection parameters")
-    g.add_argument("-c", "--conn", metavar="NAME", dest="connection_name", help="A connection name from the connections.toml file")
+    g.add_argument(
+        "-c", "--conn", metavar="NAME", dest="connection_name", help="A connection name from the connections.toml file"
+    )
     g.add_argument("--database", metavar="NAME", help="override or set the default database")
     g.add_argument("--role", metavar="NAME", help="override or set the default role")
     g.add_argument("--schema", metavar="NAME", help="override or set the default schema")
@@ -150,7 +152,7 @@ def with_connection_args(doc: str | None, **kwargs: Any) -> Callable[..., Callab
     return getargs
 
 
-def pytype(meta: ResultMetadata, best_match: bool = False) -> type[Any]:
+def _pytype(meta: ResultMetadata, best_match: bool = False) -> type[Any]:
     """convert Python DB API data type to python type
 
     Args:
@@ -183,3 +185,38 @@ def pytype(meta: ResultMetadata, best_match: bool = False) -> type[Any]:
     type_ = TYPE_MAP.get(sql_type_name, str)
 
     return type_ if best_match else str if type_ in [dict, object, list] else type_
+
+
+try:
+    import snowflake.snowpark.types as T
+
+    def pytype(meta: ResultMetadata | T.DataType, best_match: bool = False) -> type[Any]:
+        """convert Python DB API or Snowpark data type to python type
+
+        Args:
+            meta: an individual value returned as part of cursor.description or snowflake.snowpark.types.DataType
+            best_match: return Python type that is best suited, rather than the actual type used by the connector
+
+        Returns:
+            Python type that best matches Snowflake's type, or str in other cases
+        """
+        if isinstance(meta, ResultMetadata):
+            return _pytype(meta, best_match)
+
+        types = {
+            T.LongType: int,
+            T.DateType: dt.date,
+            T.TimeType: dt.time,
+            T.TimestampType: dt.datetime,
+            T.BooleanType: bool,
+            T.DecimalType: Decimal,
+            T.DoubleType: float,
+            T.BinaryType: bytearray,
+            T.ArrayType: list,
+            T.VariantType: object,
+            T.MapType: dict,
+        }
+        return next((py_t for sp_t, py_t in types.items() if isinstance(meta, sp_t)), str)
+
+except ImportError:
+    pytype = _pytype  # type: ignore

@@ -14,7 +14,7 @@
     nix-utils.lib.mkPyFlake {
       pkgs       = { sfconn = import ./sfconn.nix; sfconn02x = import ./sfconn02x.nix; };
       defaultPkg = "sfconn";
-      deps       = [ "snowflake-connector-python" "pyjwt" "pytest" ];
+      deps       = [ "snowflake-connector-python" "snowflake-snowpark-python" "pyjwt" "pytest" ];
       pyFlakes   = [ snowflake ];
     };
 }
