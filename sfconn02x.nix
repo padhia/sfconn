@@ -1,6 +1,7 @@
 {
   lib,
   buildPythonPackage,
+  fetchPypi,
   setuptools,
   snowflake-connector-python,
   pyjwt,
@@ -8,9 +9,13 @@
 }:
 buildPythonPackage rec {
   pname     = "sfconn";
-  version   = "0.3.1";
+  version   = "0.2.5";
   pyproject = true;
-  src       = ./.;
+
+  src = fetchPypi {
+    inherit pname version;
+    hash = "sha256-jdhR9UgHH2klrTtI0bSWN4/FSYXxJdlDhKMRW7c+AdQ=";
+  };
 
   propagatedBuildInputs = [ snowflake-connector-python pyjwt ];
   nativeBuildInputs     = [ setuptools pytest ];

@@ -1,3 +1,5 @@
+# sfconn
+
 [![PyPi](https://img.shields.io/pypi/v/sfconn.svg)](https://pypi.python.org/pypi/sfconn) [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT) ![Python3.11+](https://img.shields.io/badge/dynamic/json?query=info.requires_python&label=python&url=https%3A%2F%2Fpypi.org%2Fpypi%2Fsfconn%2Fjson)
 
 Snowflake connection helper functions
@@ -5,12 +7,10 @@ Snowflake connection helper functions
 A Python library to simplify connecting to Snowflake databases
 
 **Notes**
-1. This is a major version upgrade and breaks compatibility with the previous versions (< `0.3.0`). `sfconn` now relies on `snowflake-python-connector` for accessing named connections (e.g. `connections.toml`). If you still need the ability use named connections from `~/.snowflake/config`, please continue using older version (`0.2.x`).
-1. `sfconn` modifies the way `private_key_file` connection option is evaluated in the following ways:
-    - with `--keyfile-anchor` option (default `$SFCONN_KEYFILE_ANCHOR`): uses the supplied value to anchor any relative paths (v/s anchoring paths relative to current working directory of the running process)
-    - with `--keyfile-strip-pfx` option (default `$SFCONN_KEYFILE_STRIP_PFX` ): strips the specified prefix from the path values (so `--keyfile-anchor` option can be used)
+1. This is a major version upgrade and breaks compatibility with the previous versions (< `0.3.0`). `sfconn` now relies on `snowflake-python-connector` for accessing named connections ([`connections.toml`](https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-connect#connecting-using-the-connections-toml-file)).
+1. `sfconn` optionally modifies the way `private_key_file` connection option is evaluated. When `--keyfile-pfx-map` option is specified, or if `$SFCONN_KEYFILE_PFX_MAP` is set, (option value must be a pair of source and target paths separated by `:`). `private_key_file` option, if present and begins with the source path, it is temporarily modified as if it begins with the target path. Primary use-case is to be able to maintain one copy of `connections.toml` file across different execution environments, such as within containers.
 
-# Installation
+## Installation
 
 Use Python's standard `pip` utility for installation:
 
@@ -18,49 +18,43 @@ Use Python's standard `pip` utility for installation:
 pip install --upgrade sfconn
 ```
 
-# Usage
+## Usage
 
-## `getconn()`
+### `getconn()` and `getsess()`
+
+`getconn` and `getsess` are wrapper functions over native Snowflake functions with added functionality (mainly mapping `private_key_file` value as described above).
+
+**Note:** `getsess` is meant to work with *Snowpark* applications. As such, it will raise a `NotImplementedError` exception if `snowflake-snowpark-python` package is not available.
 
 **Usage:**
 ```python
-def getconn(connection_name: str | None, **overrides: dict[str, Any]) -> Connection
+def getconn(connection_name: str | None, **overrides: dict[str, Any]) -> Connection:
+def getsess(connection_name: str | None, **overrides: dict[str, Any]) -> Session:
 ```
 
-`getconn` accepts a connection name and returns a connection object with modified behavior as noted above.
+`getconn` and `getsess` accept a connection name and return a connection or session object respectively with modified behavior as noted above.
 
-**Example:**
-
+**Examples:**
 ```python
 from sfconn import getconn
 
-# assuming 'dev' is a connection defined in ~/.snowflake/config
+# assuming 'dev' is a named connection defined in connections.toml
 with getconn('dev', schema='PUBLIC') as cnx:
     with cnx.cursor() as csr:
         csr.execute('SELECT CURRENT_USER()')
         print("Hello " + csr.fetchone()[0])
 ```
 
-## `conn_opts()`
-
-**Usage:**
 ```python
-def conn_opts(name: str | None , **overrides: dict[str, Any]) -> dict[str, Any]
+from sfconn import getsess
+
+# assuming 'dev' is a named connection defined in connections.toml
+with getsess('dev', schema='PUBLIC') as session:
+    df = sess.sql("select current_user() as curr_user, current_role() as curr_role")
+    print(df.collect())
 ```
 
-`conn_opts`, returns a Python `dict` object populated with options and values. This can be useful passing as an argument to `snowflake.snowpark.Session.builder.configs()` method.
-
-**Example:**
-
-```python
-from sfconn import conn_opts
-from snowflake.snowpark import Session
-
-# assuming 'dev' is a connection defined in ~/.snowflake/config
-session = Session.builder.configs(conn_opts('dev')).create()
-```
-
-## `run_query*()`
+### `run_query*()`
 
 Cursor objects add a family of few convenience methods that return an `Iterable` of values instead of generic `tuple` or `dict`.
 
@@ -101,35 +95,36 @@ with getconn() as cnx, cnx.cursor() as csr:
     )
 ```
 
-## Decorator functions
+### Decorator Functions
 
-Python scripts that accept command-line parameters and use `argparse` library, can use decorator functions to further reduce boilerplate code needed for setting up common Snowflake connection options as command-line arguments
+Python command-line scripts that use `argparse` library, can use decorator functions to further reduce boilerplate code needed for setting up a Snowflake connection and error checking
 
 ```python
 def with_connection_args(doc: str | None) -> Callable[[argparse.ArgumentParser], None]:
 def with_connection(logger = None) -> Callable[[Connection, ...], None]:
-def with_connection_option(logger = None) => Callable([dict[str, Any, ...]])
+def with_session(logger = None) -> Callable[[Session, ...], None]:
 ```
 
 `with_connection_args()` decorator function:
 1. builds an `ArgumentParser` object
-1. adds common Snowflake connection options as arguments that allow overriding values specified in `~/.snowsql/config`
+1. adds common Snowflake connection options as arguments including overriding role, database, schema and warehouse
 1. calls the decorated function with the parser object to allow adding any script specific options
 
 `with_connection()` decorator function:
-1. consumes standard Snowflake connection options (specified with `args()`)
+1. consumes standard Snowflake connection options (specified with `with_connection_args()`)
 1. creates a connection object
 1. calls the decorated function with a connection object as first parameter and any other script specific options that were specified on command line
 
-`with_connection_option()` decorator function:
-- Similar to `entry()` but passes a `dict` of options as the first parameter. This is useful for passing options to the `snowflake.snowpark.Session.builder.configs()` method
+`with_session()` decorator function:
+1. Similar to `with_connection()` but creates a `snowflake.snowpark.Session` object instead of a connection object
+1. **Note:** this decorator will raise an `NotImplementedError` exception if `snowflake-snowpark-python` package is not available.
 
 **Example:**
 
 ```python
-from sfconn import args, entry
+from sfconn import with_connection_args, with_connection
 
-@entry
+@with_connection
 def main(con, show_account: bool):
     with con.cursor() as csr:
         csr.execute('SELECT CURRENT_USER()')
@@ -138,7 +133,7 @@ def main(con, show_account: bool):
             csr.execute("SELECT CURRENT_ACCOUNT()")
             print("You are connected to account: " + csr.fetchone()[0])
 
-@args("Sample application that greets the current Snowflake user")
+@with_connection_args("Sample application that greets the current Snowflake user")
 def getargs(parser):
     parser.add_argument("-a", "--show-account", action='store_true', help="show snowflake account name")
 
@@ -146,7 +141,7 @@ if __name__ == '__main__':
     main(**vars(getargs()))
 ```
 
-## `get_token()`
+### `get_token()`
 
 Function `sfconn.get_token()` returns a JWT token for connections that use `private_key_path` option. An optional lifetime value can be specified (default 54 minutes)
 
@@ -154,6 +149,5 @@ Function `sfconn.get_token()` returns a JWT token for connections that use `priv
 
 ```python
 from sfconn import get_token
-
-# assuming 'dev' is a connection defined in ~/.snowflake/config and uses key-pair authentication
-jwt_token = get_token('dev', 120)  # get a token valid for 120 minutes
+jwt_token = get_token(None, 120)  # get token using default (None) connection, and valid for 120 minutes
+```

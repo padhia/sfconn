@@ -1,4 +1,5 @@
 "get a JWT token"
+
 import base64
 import datetime as dt
 import hashlib
@@ -48,7 +49,7 @@ def get_token(connection_name: str | None = None, lifetime: dt.timedelta = LIFET
         *: Any exceptions raised by either conn_opts() or class PrivateKey
     """
 
-    opts = conn_opts(connection_name)
+    opts = conn_opts(connection_name=connection_name)
     keyf = cast(str | None, opts.get("private_key_file"))
     if keyf is None:
         raise ValueError(f"'{connection_name}' does not use key-pair authentication to support creating a JWT")

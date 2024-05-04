@@ -1,4 +1,5 @@
 "test connection options"
+
 from pathlib import Path
 
 import pytest

@@ -10,29 +10,30 @@ authors = [
 description = "Snowflake connection helper functions"
 readme = "README.md"
 requires-python = ">=3.11"
-classifiers = [
-    "Programming Language :: Python :: 3",
-]
+classifiers = ["Programming Language :: Python :: 3"]
 dependencies = [
     "snowflake-connector-python>=3.7.0",
+    "pyjwt",
 ]
 dynamic = ["version"]
 
 [project.optional-dependencies]
-keyring = ["keyring"]
-jwt = ["pyjwt"]
-tests = ["pytest"]
+test = ["pytest"]
+snowpark = ["snowflake-snowpark-python"]
+
+[project.urls]
+Homepage = "https://github.com/padhia/sfconn"
+
+[tool.setuptools]
+packages = ["sfconn"]
 
 [tool.setuptools.dynamic]
 version = {attr = "sfconn.__version__"}
 
-[tool.setuptools.package-data]
-"*" = ["py.typed"]
-
 [tool.ruff]
 line-length = 130
 target-version = "py311"
-extend-select = ["I"]
+lint.extend-select = ["I"]
 
 [tool.pytest.ini_options]
 pythonpath = [ "." ]

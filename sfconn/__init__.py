@@ -1,25 +1,29 @@
 "connection package"
-__version__ = "0.3.0"
 
-from snowflake.connector import DatabaseError, InterfaceError, ProgrammingError
+__version__ = "0.3.1"
+
+from snowflake.connector import DatabaseError, DataError, InterfaceError, ProgrammingError
 from snowflake.connector.cursor import ResultMetadata
 
-from .conn import Connection, Cursor, conn_opts, connection_names, getconn
+from .conn import Connection, Cursor, available_connections, default_connection_name, getconn, getsess
 from .jwt import get_token
-from .utils import with_connection, with_connection_args, with_connection_options
+from .utils import pytype, with_connection, with_connection_args, with_session
 
 __all__ = [
-    "conn_opts",
-    "getconn",
-    "connection_names",
-    "get_token",
-    "Connection",
-    "ResultMetadata",
-    "Cursor",
     "DatabaseError",
-    "ProgrammingError",
+    "DataError",
     "InterfaceError",
-    "with_connection_args",
+    "ProgrammingError",
+    "ResultMetadata",
+    "Connection",
+    "Cursor",
+    "available_connections",
+    "default_connection_name",
+    "getconn",
+    "getsess",
+    "get_token",
+    "pytype",
     "with_connection",
-    "with_connection_options",
+    "with_connection_args",
+    "with_session",
 ]
