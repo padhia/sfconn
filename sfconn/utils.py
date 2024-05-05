@@ -11,98 +11,62 @@ from typing import Any, Callable, cast
 from snowflake.connector.constants import FIELD_TYPES
 from snowflake.connector.cursor import ResultMetadata
 
-from .conn import conn_opts, getconn, getsess
-
-_loglevel = logging.WARNING
+from .conn import getconn, getsess
 
 
-def init_logging(logger: logging.Logger) -> None:
+def init_logging(logger: logging.Logger, loglevel: int = logging.WARNING) -> None:
     "initialize the logging system"
     h = logging.StreamHandler()
     h.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
     logger.addHandler(h)
-    logger.setLevel(_loglevel)
+    logger.setLevel(loglevel)
 
 
-def with_connection_options(fl: Callable[..., Any] | logging.Logger | None = None) -> Callable[..., Any]:
-    "wraps application entry function that expects a connection"
+def _mk_decorator(connector: Callable[..., Any]) -> Callable[..., Any] | logging.Logger | None:
+    def decorator(fl: Callable[..., Any] | logging.Logger | None = None) -> Callable[..., Any]:
+        "wraps application entry function that expects a connection"
 
-    logger = fl if isinstance(fl, logging.Logger) else None
+        logger = fl if isinstance(fl, logging.Logger) else None
 
-    def wrapper(fn: Callable[..., Any]) -> Callable[..., Any]:
-        @wraps(fn)
-        def wrapped(
-            keyfile_pfx_map: tuple[Path, Path] | None,
-            connection_name: str | None,
-            database: str | None,
-            role: str | None,
-            schema: str | None,
-            warehouse: str | None,
-            loglevel: int,
-            **kwargs: Any,
-        ) -> Any:
-            "script entry-point"
-            global _loglevel
+        def wrapper(fn: Callable[..., Any]) -> Callable[..., Any]:
+            @wraps(fn)
+            def wrapped(
+                keyfile_pfx_map: tuple[Path, Path] | None,
+                connection_name: str | None,
+                database: str | None,
+                role: str | None,
+                schema: str | None,
+                warehouse: str | None,
+                loglevel: int,
+                **kwargs: Any,
+            ) -> Any:
+                "script entry-point"
+                init_logging(logging.getLogger(__name__))
+                if logger is not None:
+                    init_logging(logger, loglevel)
 
-            _loglevel = loglevel
-            init_logging(logging.getLogger(__name__))
-            if logger is not None:
-                init_logging(logger)
-            _opts = conn_opts(
-                keyfile_pfx_map=keyfile_pfx_map,
-                connection_name=connection_name,
-                database=database,
-                role=role,
-                schema=schema,
-                warehouse=warehouse,
-            )
-            return fn(_opts, **kwargs)
+                try:
+                    with connector(
+                        keyfile_pfx_map=keyfile_pfx_map,
+                        connection_name=connection_name,
+                        database=database,
+                        role=role,
+                        schema=schema,
+                        warehouse=warehouse,
+                    ) as cnx:
+                        return fn(cnx, **kwargs)
+                except Exception as err:
+                    raise SystemExit(str(err))
 
-        return wrapped
+            return wrapped
 
-    return wrapper if fl is None or isinstance(fl, logging.Logger) else wrapper(fl)
+        return wrapper if fl is None or isinstance(fl, logging.Logger) else wrapper(fl)
 
-
-def with_connection(fl: Callable[..., Any] | logging.Logger | None = None) -> Callable[..., Any]:
-    "wraps application entry function that expects a connection"
-
-    logger = fl if isinstance(fl, logging.Logger) else None
-
-    def wrapper(fn: Callable[..., Any]) -> Callable[..., Any]:
-        @wraps(fn)
-        @with_connection_options(logger)
-        def wrapped(opts: dict[str, Any], **kwargs: Any) -> Any:
-            "script entry-point"
-            try:
-                with getconn(**opts) as cnx:
-                    return fn(cnx, **kwargs)
-            except Exception as err:
-                raise SystemExit(str(err))
-
-        return wrapped
-
-    return wrapper if fl is None or isinstance(fl, logging.Logger) else wrapper(fl)
+    return decorator
 
 
-def with_session(fl: Callable[..., Any] | logging.Logger | None = None) -> Callable[..., Any]:
-    "wraps application entry function that expects a connection"
-
-    logger = fl if isinstance(fl, logging.Logger) else None
-
-    def wrapper(fn: Callable[..., Any]) -> Callable[..., Any]:
-        @wraps(fn)
-        @with_connection_options(logger)
-        def wrapped(opts: dict[str, Any], **kwargs: Any) -> Any:
-            "script entry-point"
-            try:
-                with getsess(**opts) as session:
-                    return fn(session, **kwargs)
-            except Exception as err:
-                raise SystemExit(str(err))
-
-        return wrapped
-
-    return wrapper if fl is None or isinstance(fl, logging.Logger) else wrapper(fl)
+with_connection = _mk_decorator(getconn)
+with_session = _mk_decorator(getsess)
 
 
 def add_conn_args(parser: ArgumentParser) -> None:
