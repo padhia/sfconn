@@ -24,7 +24,7 @@ pip install --upgrade sfconn
 
 `getconn` and `getsess` are wrapper functions over native Snowflake functions with added functionality (mainly mapping `private_key_file` value as described above).
 
-**Note:** `getsess` is meant to work with *Snowpark* applications. As such, it will raise a `NotImplementedError` exception if `snowflake-snowpark-python` package is not available.
+**Note:** `getsess()` function will be available only if `snowflake-snowpark-python` package is available at run-time.
 
 **Usage:**
 ```python
@@ -117,14 +117,16 @@ def with_session(logger = None) -> Callable[[Session, ...], None]:
 
 `with_session()` decorator function:
 1. Similar to `with_connection()` but creates a `snowflake.snowpark.Session` object instead of a connection object
-1. **Note:** this decorator will raise an `NotImplementedError` exception if `snowflake-snowpark-python` package is not available.
+1. **Note:** this decorator will be available only if `snowflake-snowpark-python` package is available at run-time.
+
+**Note**: Decorator function parenthesis cannot be omitted even if no arguments are supplied to the decorator functions
 
 **Example:**
 
 ```python
 from sfconn import with_connection_args, with_connection
 
-@with_connection
+@with_connection()
 def main(con, show_account: bool):
     with con.cursor() as csr:
         csr.execute('SELECT CURRENT_USER()')

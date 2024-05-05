@@ -5,31 +5,34 @@ import logging
 from argparse import SUPPRESS, ArgumentParser, ArgumentTypeError
 from decimal import Decimal
 from functools import wraps
+from logging import Logger
 from pathlib import Path
-from typing import Any, Callable, cast
+from typing import Any, Callable, Concatenate, ParamSpec, TypeAlias, TypeVar, cast
 
 from snowflake.connector.constants import FIELD_TYPES
 from snowflake.connector.cursor import ResultMetadata
 
-from .conn import conn_opts, getconn, getsess
+from .conn import Connection, getconn
 
-_loglevel = logging.WARNING
+P = ParamSpec("P")
+R = TypeVar("R")
+
+ConnFn: TypeAlias = Callable[Concatenate[Connection, P], R]
+ArgsFn: TypeAlias = Callable[
+    [Concatenate[tuple[Path, Path] | None, str | None, str | None, str | None, str | None, str | None, int, P]], R
+]
 
 
-def init_logging(logger: logging.Logger) -> None:
+def init_logging(logger: Logger, loglevel: int = logging.WARNING) -> None:
     "initialize the logging system"
     h = logging.StreamHandler()
     h.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
     logger.addHandler(h)
-    logger.setLevel(_loglevel)
+    logger.setLevel(loglevel)
 
 
-def with_connection_options(fl: Callable[..., Any] | logging.Logger | None = None) -> Callable[..., Any]:
-    "wraps application entry function that expects a connection"
-
-    logger = fl if isinstance(fl, logging.Logger) else None
-
-    def wrapper(fn: Callable[..., Any]) -> Callable[..., Any]:
+def with_connection(logger: Logger | None = None) -> Callable[[ConnFn[P, R]], ArgsFn[P, R]]:
+    def wrapper(fn: ConnFn[P, R]) -> ArgsFn[P, R]:
         @wraps(fn)
         def wrapped(
             keyfile_pfx_map: tuple[Path, Path] | None,
@@ -39,70 +42,30 @@ def with_connection_options(fl: Callable[..., Any] | logging.Logger | None = Non
             schema: str | None,
             warehouse: str | None,
             loglevel: int,
-            **kwargs: Any,
-        ) -> Any:
+            *args: P.args,
+            **kwargs: P.kwargs,
+        ) -> R:
             "script entry-point"
-            global _loglevel
-
-            _loglevel = loglevel
             init_logging(logging.getLogger(__name__))
             if logger is not None:
-                init_logging(logger)
-            _opts = conn_opts(
-                keyfile_pfx_map=keyfile_pfx_map,
-                connection_name=connection_name,
-                database=database,
-                role=role,
-                schema=schema,
-                warehouse=warehouse,
-            )
-            return fn(_opts, **kwargs)
+                init_logging(logger, loglevel)
 
-        return wrapped
-
-    return wrapper if fl is None or isinstance(fl, logging.Logger) else wrapper(fl)
-
-
-def with_connection(fl: Callable[..., Any] | logging.Logger | None = None) -> Callable[..., Any]:
-    "wraps application entry function that expects a connection"
-
-    logger = fl if isinstance(fl, logging.Logger) else None
-
-    def wrapper(fn: Callable[..., Any]) -> Callable[..., Any]:
-        @wraps(fn)
-        @with_connection_options(logger)
-        def wrapped(opts: dict[str, Any], **kwargs: Any) -> Any:
-            "script entry-point"
             try:
-                with getconn(**opts) as cnx:
-                    return fn(cnx, **kwargs)
+                with getconn(
+                    keyfile_pfx_map=keyfile_pfx_map,
+                    connection_name=connection_name,
+                    database=database,
+                    role=role,
+                    schema=schema,
+                    warehouse=warehouse,
+                ) as cnx:
+                    return fn(cnx, *args, **kwargs)
             except Exception as err:
                 raise SystemExit(str(err))
 
-        return wrapped
+        return wrapped  # type: ignore
 
-    return wrapper if fl is None or isinstance(fl, logging.Logger) else wrapper(fl)
-
-
-def with_session(fl: Callable[..., Any] | logging.Logger | None = None) -> Callable[..., Any]:
-    "wraps application entry function that expects a connection"
-
-    logger = fl if isinstance(fl, logging.Logger) else None
-
-    def wrapper(fn: Callable[..., Any]) -> Callable[..., Any]:
-        @wraps(fn)
-        @with_connection_options(logger)
-        def wrapped(opts: dict[str, Any], **kwargs: Any) -> Any:
-            "script entry-point"
-            try:
-                with getsess(**opts) as session:
-                    return fn(session, **kwargs)
-            except Exception as err:
-                raise SystemExit(str(err))
-
-        return wrapped
-
-    return wrapper if fl is None or isinstance(fl, logging.Logger) else wrapper(fl)
+    return wrapper
 
 
 def add_conn_args(parser: ArgumentParser) -> None:
@@ -152,7 +115,7 @@ def with_connection_args(doc: str | None, **kwargs: Any) -> Callable[..., Callab
     return getargs
 
 
-def _pytype(meta: ResultMetadata, best_match: bool = False) -> type[Any]:
+def pytype_conn(meta: ResultMetadata, best_match: bool = False) -> type:
     """convert Python DB API data type to python type
 
     Args:
@@ -185,38 +148,3 @@ def _pytype(meta: ResultMetadata, best_match: bool = False) -> type[Any]:
     type_ = TYPE_MAP.get(sql_type_name, str)
 
     return type_ if best_match else str if type_ in [dict, object, list] else type_
-
-
-try:
-    import snowflake.snowpark.types as T
-
-    def pytype(meta: ResultMetadata | T.DataType, best_match: bool = False) -> type[Any]:
-        """convert Python DB API or Snowpark data type to python type
-
-        Args:
-            meta: an individual value returned as part of cursor.description or snowflake.snowpark.types.DataType
-            best_match: return Python type that is best suited, rather than the actual type used by the connector
-
-        Returns:
-            Python type that best matches Snowflake's type, or str in other cases
-        """
-        if isinstance(meta, ResultMetadata):
-            return _pytype(meta, best_match)
-
-        types = {
-            T.LongType: int,
-            T.DateType: dt.date,
-            T.TimeType: dt.time,
-            T.TimestampType: dt.datetime,
-            T.BooleanType: bool,
-            T.DecimalType: Decimal,
-            T.DoubleType: float,
-            T.BinaryType: bytearray,
-            T.ArrayType: list,
-            T.VariantType: object,
-            T.MapType: dict,
-        }
-        return next((py_t for sp_t, py_t in types.items() if isinstance(meta, sp_t)), str)
-
-except ImportError:
-    pytype = _pytype  # type: ignore
