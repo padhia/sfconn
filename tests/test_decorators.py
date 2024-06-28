@@ -19,7 +19,7 @@ def test_decorators() -> None:
     def getargs(_: ArgumentParser) -> Any:
         pass
 
-    @with_connection
+    @with_connection()
     def main(cnx: Connection) -> None:
         with cnx.cursor() as csr:
             rows = list(csr.run_query(Result, "select current_user() as user, current_role() as role"))

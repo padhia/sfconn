@@ -116,25 +116,3 @@ def getconn(*, keyfile_pfx_map: tuple[Path, Path] | None = None, **kwargs: Any) 
         Connection object returned by Snowflake python connector
     """
     return Connection(**conn_opts(keyfile_pfx_map=keyfile_pfx_map, **kwargs))  # type: ignore
-
-
-try:
-    from snowflake.snowpark import Session
-
-    def getsess(*, keyfile_pfx_map: tuple[Path, Path] | None = None, **kwargs: Any) -> Session:
-        """create a Session object using named configuration
-
-        Args:
-            keyfile_pfx_map: if specified must be a a pair of Path values specified as <from-path>:<to-path>, which will
-                             be used to temporarily change private_key_file path value if it starts with <from-pahd> prefix
-            **kwargs: Any parameter that is valid for snowflake.connector.connect() method
-
-        Returns:
-            Session object returned by Snowflake python connector
-        """
-        return Session.builder.configs(conn_opts(keyfile_pfx_map=keyfile_pfx_map, **kwargs)).create()
-
-except ImportError:
-
-    def getsess(*, keyfile_pfx_map: tuple[Path, Path] | None = None, **kwargs: Any) -> Session:
-        raise NotImplementedError("Unable to import snowflake.snowpark.Session; is snowflake-snowpark-python installed?")

@@ -99,6 +99,8 @@ with getconn() as cnx, cnx.cursor() as csr:
 
 Python command-line scripts that use `argparse` library, can use decorator functions to further reduce boilerplate code needed for setting up a Snowflake connection and error checking
 
+Note: Parenthesis cannot be omitted if no arguments are supplied to the decorator functions
+
 ```python
 def with_connection_args(doc: str | None) -> Callable[[argparse.ArgumentParser], None]:
 def with_connection(logger = None) -> Callable[[Connection, ...], None]:
@@ -124,7 +126,7 @@ def with_session(logger = None) -> Callable[[Session, ...], None]:
 ```python
 from sfconn import with_connection_args, with_connection
 
-@with_connection
+@with_connection()
 def main(con, show_account: bool):
     with con.cursor() as csr:
         csr.execute('SELECT CURRENT_USER()')

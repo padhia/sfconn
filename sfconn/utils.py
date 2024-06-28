@@ -5,39 +5,25 @@ import logging
 from argparse import SUPPRESS, ArgumentParser, ArgumentTypeError
 from decimal import Decimal
 from functools import wraps
+from logging import Logger
 from pathlib import Path
-from typing import Any, Callable, Concatenate, ParamSpec, Protocol, TypeAlias, TypeVar, cast
+from typing import Any, Callable, Concatenate, ParamSpec, TypeAlias, TypeVar, cast
 
 from snowflake.connector.constants import FIELD_TYPES
 from snowflake.connector.cursor import ResultMetadata
 
-from .conn import Connection, getconn, getsess
+from .conn import Connection, getconn
 
 P = ParamSpec("P")
 R = TypeVar("R")
 
-try:
-    from snowflake.snowpark import Session
-
-    C: TypeAlias = Connection | Session  # type: ignore
-except ImportError:
-    C: TypeAlias = Connection  # type: ignore
+ConnFn: TypeAlias = Callable[Concatenate[Connection, P], R]
+ArgsFn: TypeAlias = Callable[
+    [Concatenate[tuple[Path, Path] | None, str | None, str | None, str | None, str | None, str | None, int, P]], R
+]
 
 
-class Connector(Protocol):
-    def __call__(
-        self,
-        *,
-        keyfile_pfx_map: tuple[Path, Path] | None,
-        connection_name: str | None,
-        database: str | None,
-        role: str | None,
-        schema: str | None,
-        warehouse: str | None,
-    ) -> C: ...
-
-
-def init_logging(logger: logging.Logger, loglevel: int = logging.WARNING) -> None:
+def init_logging(logger: Logger, loglevel: int = logging.WARNING) -> None:
     "initialize the logging system"
     h = logging.StreamHandler()
     h.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
@@ -45,10 +31,8 @@ def init_logging(logger: logging.Logger, loglevel: int = logging.WARNING) -> Non
     logger.setLevel(loglevel)
 
 
-def _decorate_logger_conn_fn(connector: Connector, logger: logging.Logger | None):
-    def _decorate_conn_fn(
-        fn: Callable[Concatenate[C, P], R],
-    ) -> Callable[[Concatenate[tuple[Path, Path] | None, str | None, str | None, str | None, str | None, str | None, int, P]], R]:
+def with_connection(logger: Logger | None = None) -> Callable[[ConnFn[P, R]], ArgsFn[P, R]]:
+    def wrapper(fn: ConnFn[P, R]) -> ArgsFn[P, R]:
         @wraps(fn)
         def wrapped(
             keyfile_pfx_map: tuple[Path, Path] | None,
@@ -67,7 +51,7 @@ def _decorate_logger_conn_fn(connector: Connector, logger: logging.Logger | None
                 init_logging(logger, loglevel)
 
             try:
-                with connector(
+                with getconn(
                     keyfile_pfx_map=keyfile_pfx_map,
                     connection_name=connection_name,
                     database=database,
@@ -81,23 +65,7 @@ def _decorate_logger_conn_fn(connector: Connector, logger: logging.Logger | None
 
         return wrapped  # type: ignore
 
-    return _decorate_conn_fn
-
-
-def _mk_decorator(connector: Connector):
-    def wrapper(fl: Callable[Concatenate[C, P], R] | logging.Logger | None = None):
-        "wraps application entry function that expects a Connection (or Session)"
-
-        if fl is None or isinstance(fl, logging.Logger):
-            return _decorate_logger_conn_fn(connector, fl)
-        else:
-            return _decorate_logger_conn_fn(connector, None)(fl)
-
     return wrapper
-
-
-with_connection = _mk_decorator(getconn)
-with_session = _mk_decorator(getsess)
 
 
 def add_conn_args(parser: ArgumentParser) -> None:
@@ -147,7 +115,7 @@ def with_connection_args(doc: str | None, **kwargs: Any) -> Callable[..., Callab
     return getargs
 
 
-def _pytype(meta: ResultMetadata, best_match: bool = False) -> type[Any]:
+def pytype_conn(meta: ResultMetadata, best_match: bool = False) -> type:
     """convert Python DB API data type to python type
 
     Args:
@@ -180,38 +148,3 @@ def _pytype(meta: ResultMetadata, best_match: bool = False) -> type[Any]:
     type_ = TYPE_MAP.get(sql_type_name, str)
 
     return type_ if best_match else str if type_ in [dict, object, list] else type_
-
-
-try:
-    import snowflake.snowpark.types as T
-
-    def pytype(meta: ResultMetadata | T.DataType, best_match: bool = False) -> type[Any]:
-        """convert Python DB API or Snowpark data type to python type
-
-        Args:
-            meta: an individual value returned as part of cursor.description or snowflake.snowpark.types.DataType
-            best_match: return Python type that is best suited, rather than the actual type used by the connector
-
-        Returns:
-            Python type that best matches Snowflake's type, or str in other cases
-        """
-        if isinstance(meta, ResultMetadata):
-            return _pytype(meta, best_match)
-
-        types = {
-            T.LongType: int,
-            T.DateType: dt.date,
-            T.TimeType: dt.time,
-            T.TimestampType: dt.datetime,
-            T.BooleanType: bool,
-            T.DecimalType: Decimal,
-            T.DoubleType: float,
-            T.BinaryType: bytearray,
-            T.ArrayType: list,
-            T.VariantType: object,
-            T.MapType: dict,
-        }
-        return next((py_t for sp_t, py_t in types.items() if isinstance(meta, sp_t)), str)
-
-except ImportError:
-    pytype = _pytype  # type: ignore
