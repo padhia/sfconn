@@ -6,12 +6,35 @@ from argparse import SUPPRESS, ArgumentParser, ArgumentTypeError
 from decimal import Decimal
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, cast
+from typing import Any, Callable, Concatenate, ParamSpec, Protocol, TypeAlias, TypeVar, cast
 
 from snowflake.connector.constants import FIELD_TYPES
 from snowflake.connector.cursor import ResultMetadata
 
-from .conn import getconn, getsess
+from .conn import Connection, getconn, getsess
+
+P = ParamSpec("P")
+R = TypeVar("R")
+
+try:
+    from snowflake.snowpark import Session
+
+    C: TypeAlias = Connection | Session  # type: ignore
+except ImportError:
+    C: TypeAlias = Connection  # type: ignore
+
+
+class Connector(Protocol):
+    def __call__(
+        self,
+        *,
+        keyfile_pfx_map: tuple[Path, Path] | None,
+        connection_name: str | None,
+        database: str | None,
+        role: str | None,
+        schema: str | None,
+        warehouse: str | None,
+    ) -> C: ...
 
 
 def init_logging(logger: logging.Logger, loglevel: int = logging.WARNING) -> None:
@@ -22,47 +45,55 @@ def init_logging(logger: logging.Logger, loglevel: int = logging.WARNING) -> Non
     logger.setLevel(loglevel)
 
 
-def _mk_decorator(connector: Callable[..., Any]) -> Callable[..., Any] | logging.Logger | None:
-    def decorator(fl: Callable[..., Any] | logging.Logger | None = None) -> Callable[..., Any]:
-        "wraps application entry function that expects a connection"
+def _decorate_logger_conn_fn(connector: Connector, logger: logging.Logger | None):
+    def _decorate_conn_fn(
+        fn: Callable[Concatenate[C, P], R],
+    ) -> Callable[[Concatenate[tuple[Path, Path] | None, str | None, str | None, str | None, str | None, str | None, int, P]], R]:
+        @wraps(fn)
+        def wrapped(
+            keyfile_pfx_map: tuple[Path, Path] | None,
+            connection_name: str | None,
+            database: str | None,
+            role: str | None,
+            schema: str | None,
+            warehouse: str | None,
+            loglevel: int,
+            *args: P.args,
+            **kwargs: P.kwargs,
+        ) -> R:
+            "script entry-point"
+            init_logging(logging.getLogger(__name__))
+            if logger is not None:
+                init_logging(logger, loglevel)
 
-        logger = fl if isinstance(fl, logging.Logger) else None
+            try:
+                with connector(
+                    keyfile_pfx_map=keyfile_pfx_map,
+                    connection_name=connection_name,
+                    database=database,
+                    role=role,
+                    schema=schema,
+                    warehouse=warehouse,
+                ) as cnx:
+                    return fn(cnx, *args, **kwargs)
+            except Exception as err:
+                raise SystemExit(str(err))
 
-        def wrapper(fn: Callable[..., Any]) -> Callable[..., Any]:
-            @wraps(fn)
-            def wrapped(
-                keyfile_pfx_map: tuple[Path, Path] | None,
-                connection_name: str | None,
-                database: str | None,
-                role: str | None,
-                schema: str | None,
-                warehouse: str | None,
-                loglevel: int,
-                **kwargs: Any,
-            ) -> Any:
-                "script entry-point"
-                init_logging(logging.getLogger(__name__))
-                if logger is not None:
-                    init_logging(logger, loglevel)
+        return wrapped  # type: ignore
 
-                try:
-                    with connector(
-                        keyfile_pfx_map=keyfile_pfx_map,
-                        connection_name=connection_name,
-                        database=database,
-                        role=role,
-                        schema=schema,
-                        warehouse=warehouse,
-                    ) as cnx:
-                        return fn(cnx, **kwargs)
-                except Exception as err:
-                    raise SystemExit(str(err))
+    return _decorate_conn_fn
 
-            return wrapped
 
-        return wrapper if fl is None or isinstance(fl, logging.Logger) else wrapper(fl)
+def _mk_decorator(connector: Connector):
+    def wrapper(fl: Callable[Concatenate[C, P], R] | logging.Logger | None = None):
+        "wraps application entry function that expects a Connection (or Session)"
 
-    return decorator
+        if fl is None or isinstance(fl, logging.Logger):
+            return _decorate_logger_conn_fn(connector, fl)
+        else:
+            return _decorate_logger_conn_fn(connector, None)(fl)
+
+    return wrapper
 
 
 with_connection = _mk_decorator(getconn)
