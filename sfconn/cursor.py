@@ -31,7 +31,7 @@ class Cursor(SnowflakeCursor):
         Returns:
             Self
         """
-        if logger.getEffectiveLevel() <= DEBUG:
+        if logger.getEffectiveLevel() >= DEBUG:
             fi = getframeinfo(currentframe().f_back.f_back)  # type: ignore
             logger.debug(
                 "Running SQL, file: %s, line: %d, function: %s\n%s;",

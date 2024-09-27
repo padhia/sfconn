@@ -33,6 +33,10 @@ def _parse_keyfile_pfx_map() -> tuple[Path, Path] | None:
 _default_keyfile_pfx_map = _parse_keyfile_pfx_map()
 
 
+def _mask_opts(opts: dict[str, Any]) -> dict[str, Any]:
+    return opts | {k: "*****" for k in ["password", "passcode", "token"] if k in opts}
+
+
 class Connection(SnowflakeConnection):
     "A Connection class that overrides the cursor() method to return a custom Cursor class"
 
@@ -97,9 +101,12 @@ def conn_opts(
     if connection_name not in connections:
         raise Error(f"Invalid connection name '{connection_name}', select from [{', '.join(connections.keys())}]")
 
-    opts = {**connections[connection_name], **{k: v for k, v in overrides.items() if v is not None}}
+    opts: dict[str, Any] = {**connections[connection_name], **{k: v for k, v in overrides.items() if v is not None}}
     if "private_key_file" in opts:
         opts["private_key_file"] = fix_keyfile_path(cast(str, opts["private_key_file"]))
+
+    if logger.getEffectiveLevel() >= logging.DEBUG:
+        logger.debug(_mask_opts(opts))
 
     return opts
 

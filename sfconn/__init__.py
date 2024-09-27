@@ -1,6 +1,6 @@
 "connection package"
 
-__version__ = "0.3.2"
+__version__ = "0.3.3"
 
 from functools import singledispatch
 
@@ -8,8 +8,8 @@ from snowflake.connector import DatabaseError, DataError, InterfaceError, Progra
 from snowflake.connector.cursor import ResultMetadata
 
 from .conn import Connection, Cursor, available_connections, default_connection_name, getconn
-from .jwt import get_token
-from .utils import pytype_conn, with_connection, with_connection_args
+from .jwt import RestInfo, get_rest_info, get_token
+from .utils import pytype_conn, set_loglevel, with_connection, with_connection_args, with_rest, with_rest_args
 
 
 @singledispatch
@@ -47,8 +47,13 @@ __all__ = [
     "getconn",
     "getsess",
     "get_token",
+    "get_rest_info",
+    "RestInfo",
     "pytype",
+    "set_loglevel",
     "with_connection",
     "with_connection_args",
     "with_session",
+    "with_rest",
+    "with_rest_args",
 ]

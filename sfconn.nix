@@ -3,18 +3,23 @@
   buildPythonPackage,
   setuptools,
   snowflake-connector-python,
+  keyring,
   pyjwt,
-  pytest
 }:
 buildPythonPackage rec {
-  pname     = "sfconn";
-  version   = "0.3.2";
+  pname = "sfconn";
+  version = "0.3.3";
   pyproject = true;
-  src       = ./.;
+  src = ./.;
 
-  propagatedBuildInputs = [ snowflake-connector-python pyjwt ];
-  nativeBuildInputs     = [ setuptools pytest ];
-  doCheck               = false;
+  dependencies = [
+    snowflake-connector-python
+    keyring
+    pyjwt
+  ];
+
+  build-system = [ setuptools ];
+  doCheck = false;
 
   meta = with lib; {
     homepage    = "https://github.com/padhia/sfconn";

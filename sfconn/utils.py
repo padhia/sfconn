@@ -13,6 +13,7 @@ from snowflake.connector.constants import FIELD_TYPES
 from snowflake.connector.cursor import ResultMetadata
 
 from .conn import Connection, getconn
+from .jwt import RestInfo, get_rest_info
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -31,6 +32,11 @@ def init_logging(logger: Logger, loglevel: int = logging.WARNING) -> None:
     logger.setLevel(loglevel)
 
 
+def set_loglevel(loglevel: int = logging.WARNING) -> None:
+    "set logging level for the module, default WARNING"
+    init_logging(logging.getLogger(".".join(__name__.split(".")[:-1])), loglevel)
+
+
 def with_connection(logger: Logger | None = None) -> Callable[[ConnFn[P, R]], ArgsFn[P, R]]:
     def wrapper(fn: ConnFn[P, R]) -> ArgsFn[P, R]:
         @wraps(fn)
@@ -41,12 +47,12 @@ def with_connection(logger: Logger | None = None) -> Callable[[ConnFn[P, R]], Ar
             role: str | None,
             schema: str | None,
             warehouse: str | None,
-            loglevel: int,
+            loglevel: int = logging.WARNING,
             *args: P.args,
             **kwargs: P.kwargs,
         ) -> R:
             "script entry-point"
-            init_logging(logging.getLogger(__name__))
+            set_loglevel(loglevel)
             if logger is not None:
                 init_logging(logger, loglevel)
 
@@ -68,8 +74,8 @@ def with_connection(logger: Logger | None = None) -> Callable[[ConnFn[P, R]], Ar
     return wrapper
 
 
-def add_conn_args(parser: ArgumentParser) -> None:
-    "add default arguments"
+def add_conn_args(parser: ArgumentParser, *, debug_opt: bool = True, hide_keyfile_pfx_map: bool = True) -> None:
+    "add connection arguments"
 
     def path_pair(v: str) -> tuple[Path, Path]:
         try:
@@ -91,28 +97,98 @@ def add_conn_args(parser: ArgumentParser) -> None:
         "--keyfile-pfx-map",
         metavar="PATH:PATH",
         type=path_pair,
-        help="temporarily change private_key_file path prefix (format: <from-path>:<to-path>, default: $SFCONN_KEYFILE_PFX_MAP)",
+        help=SUPPRESS
+        if hide_keyfile_pfx_map
+        else "temporarily change private_key_file path prefix (format: <from-path>:<to-path>, default: $SFCONN_KEYFILE_PFX_MAP)",
     )
 
-    parser.add_argument(
-        "--debug", dest="loglevel", action="store_const", const=logging.DEBUG, default=logging.WARNING, help=SUPPRESS
-    )
+    if debug_opt:
+        parser.add_argument(
+            "--debug", dest="loglevel", action="store_const", const=logging.DEBUG, default=logging.WARNING, help=SUPPRESS
+        )
 
 
-def with_connection_args(doc: str | None, **kwargs: Any) -> Callable[..., Callable[..., Any]]:
+def with_connection_args(
+    doc: str | None, debug_opt: bool = True, hide_keyfile_pfx_map: bool = True, **kwargs: Any
+) -> Callable[..., Callable[..., Any]]:
     """Function decorator that instantiates and adds snowflake database connection arguments"""
 
     def getargs(fn: Callable[[ArgumentParser], None]) -> Callable[..., Any]:
         @wraps(fn)
         def wrapped(args: list[str] | None = None) -> Any:
             parser = ArgumentParser(description=doc, **kwargs)
-            add_conn_args(parser)
             fn(parser)
+            add_conn_args(parser, debug_opt=debug_opt, hide_keyfile_pfx_map=hide_keyfile_pfx_map)
             return parser.parse_args(args)
 
         return wrapped
 
     return getargs
+
+
+def with_rest_args(
+    doc: str | None, debug_opt: bool = True, hide_keyfile_pfx_map: bool = True, **kwargs: Any
+) -> Callable[..., Callable[..., Any]]:
+    """Function decorator that instantiates and adds snowflake JWT as first argument"""
+
+    def getargs(fn: Callable[[ArgumentParser], None]) -> Callable[..., Any]:
+        @wraps(fn)
+        def wrapped(args: list[str] | None = None) -> Any:
+            parser = ArgumentParser(description=doc, **kwargs)
+            fn(parser)
+            add_conn_args(parser, debug_opt=debug_opt, hide_keyfile_pfx_map=hide_keyfile_pfx_map)
+            parser.add_argument(
+                "-L",
+                "--lifetime",
+                metavar="MINUTE",
+                default=dt.timedelta(minutes=90),
+                type=lambda x: dt.timedelta(minutes=float(x)),
+                help="JWT lifetime (default 90 minutes)",
+            )
+            return parser.parse_args(args)
+
+        return wrapped
+
+    return getargs
+
+
+def with_rest(logger: Logger | None = None) -> Callable[[Callable[Concatenate[RestInfo, P], R]], ArgsFn[P, R]]:
+    def wrapper(fn: Callable[Concatenate[RestInfo, P], R]) -> ArgsFn[P, R]:
+        @wraps(fn)
+        def wrapped(
+            keyfile_pfx_map: tuple[Path, Path] | None,
+            connection_name: str | None,
+            database: str | None,
+            role: str | None,
+            schema: str | None,
+            warehouse: str | None,
+            lifetime: dt.timedelta,
+            loglevel: int,
+            *args: P.args,
+            **kwargs: P.kwargs,
+        ) -> R:
+            "script entry-point"
+            set_loglevel(loglevel)
+            if logger is not None:
+                init_logging(logger, loglevel)
+
+            try:
+                rest_info = get_rest_info(
+                    keyfile_pfx_map=keyfile_pfx_map,
+                    connection_name=connection_name,
+                    lifetime=lifetime,
+                    database=database,
+                    schema=schema,
+                    role=role,
+                    warehouse=warehouse,
+                )
+                return fn(rest_info, *args, **kwargs)
+            except Exception as err:
+                raise SystemExit(str(err))
+
+        return wrapped  # type: ignore
+
+    return wrapper
 
 
 def pytype_conn(meta: ResultMetadata, best_match: bool = False) -> type:

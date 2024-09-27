@@ -48,7 +48,7 @@ def with_session(logger: Logger | None = None) -> Callable[[ConnFn[P, R]], ArgsF
             role: str | None,
             schema: str | None,
             warehouse: str | None,
-            loglevel: int,
+            loglevel: int = logging.WARNING,
             *args: P.args,
             **kwargs: P.kwargs,
         ) -> R:
