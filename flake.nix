@@ -1,13 +1,8 @@
 {
-  description = "Snowflake connection helper functions";
-
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-
-    nix-utils.url = "github:padhia/nix-utils";
-    nix-utils.inputs.nixpkgs.follows = "nixpkgs";
-
+    
     snowflake.url = "github:padhia/snowflake";
     snowflake.inputs = {
       nixpkgs.follows = "nixpkgs";
@@ -15,34 +10,51 @@
     };
   };
 
-  outputs = { self, nixpkgs, nix-utils, flake-utils, snowflake }:
+  outputs = { self, nixpkgs, flake-utils, snowflake }:
   let
-    inherit (nix-utils.lib) pyDevShell extendPyPkgsWith;
+    inherit (nixpkgs.lib) composeManyExtensions;
 
-    overlays.default = final: prev:
-      extendPyPkgsWith prev {
-        sfconn = ./sfconn.nix;
-        sfconn02x = ./sfconn02x.nix;
-      };
+    pkgOverlay = final: prev: {
+      pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
+        (py-final: py-prev: {
+          sfconn = py-final.callPackage ./sfconn.nix {};
+          sfconn02x = py-final.callPackage ./sfconn02x.nix {};
+        })
+      ];
+    };
 
-    buildSystem = system:
+    overlays.default = composeManyExtensions [
+      snowflake.overlays.default
+      pkgOverlay
+    ];
+
+    eachSystem = system:
     let
       pkgs = import nixpkgs {
         inherit system;
         config.allowUnfree = true;
-        overlays = [ snowflake.overlays.default self.overlays.default ];
+        overlays = [ self.overlays.default ];
       };
+
+      pyPkgs = pkgs.python312Packages;
+
     in {
-      devShells.default = pyDevShell {
-        inherit pkgs;
+      devShells.default = pkgs.mkShell {
         name = "sfconn";
-        extra = [ "snowflake-snowpark-python" ];
-        pyVer = "311";
+        venvDir = "./.venv";
+        buildInputs = with pyPkgs; [
+          pkgs.ruff
+          pkgs.uv
+          python
+          venvShellHook
+          pytest
+          pyPkgs.snowflake-snowpark-python
+        ];
       };
     };
 
   in {
     inherit overlays;
-    inherit (flake-utils.lib.eachDefaultSystem buildSystem) devShells;
+    inherit (flake-utils.lib.eachDefaultSystem eachSystem) devShells;
   };
 }
