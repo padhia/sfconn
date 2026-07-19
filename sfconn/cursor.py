@@ -2,7 +2,7 @@
 
 from inspect import currentframe, getframeinfo
 from logging import DEBUG, getLogger
-from typing import Any, Callable, Iterable, Self, Sequence, TypeAlias, TypeVar, cast
+from typing import Any, Callable, Iterable, Self, Sequence, TypeAlias, TypeVar, cast, override
 
 from snowflake.connector.cursor import SnowflakeCursor
 from snowflake.connector.errors import DataError, ProgrammingError
@@ -15,9 +15,11 @@ Params: TypeAlias = Sequence[Any] | dict[Any, Any] | None
 class Cursor(SnowflakeCursor):
     "A Cursor class that adds a few convenience methods to Snowflake provided cursor class"
 
+    @override
     def __enter__(self) -> Self:
         return self
 
+    @override
     def __exit__(self, *args: Any, **kwargs: Any):
         return super().__exit__(*args, **kwargs)
 

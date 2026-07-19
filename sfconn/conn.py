@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any, Self, cast
+from typing import Any, Self, cast, override
 
 from snowflake.connector.config_manager import CONFIG_MANAGER
 from snowflake.connector.connection import SnowflakeConnection
@@ -40,12 +40,15 @@ def _mask_opts(opts: dict[str, Any]) -> dict[str, Any]:
 class Connection(SnowflakeConnection):
     "A Connection class that overrides the cursor() method to return a custom Cursor class"
 
+    @override
     def __enter__(self) -> Self:
         return self
 
+    @override
     def __exit__(self, *args: Any, **kwargs: Any):
         return super().__exit__(*args, **kwargs)
 
+    @override
     def cursor(self, cursor_class: type[SnowflakeCursor] = Cursor) -> Cursor:
         return cast(Cursor, super().cursor(cursor_class))
 
